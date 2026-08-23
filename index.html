@@ -457,9 +457,12 @@ function circleHandles(c) {
     { k: 'move', x: c.cx, y: c.cy },
     { k: 'rx', x: c.cx + c.rx, y: c.cy },
     { k: 'ry', x: c.cx, y: c.cy + c.ry },
-    { k: 'del', x: c.cx - c.rx * 0.7071, y: c.cy - c.ry * 0.7071 }
+    { k: 'del', x: c.cx - c.rx * 0.7071, y: c.cy - c.ry * 0.7071 },
+    { k: 'dup', x: c.cx + c.rx * 0.7071, y: c.cy - c.ry * 0.7071 }
   ];
 }
+/* 複製したものを少しずらす量（1マス＝目印の間隔） */
+const DUP_OFF = 1;
 function hitCircleHandle(sx, sy) {
   const f = curF(), cs = f.circles || [], tol = 12;
   for (let i = cs.length - 1; i >= 0; i--) {
@@ -497,6 +500,7 @@ function arcHandleList(a, mode) {
   else hs.push({ k: 'move', x: (a.x1 + a.x2) / 2, y: (a.y1 + a.y2) / 2 });
   const dx = a.x1 - a.x2, dy = a.y1 - a.y2, L = Math.hypot(dx, dy) || 1;
   hs.push({ k: 'del', x: a.x1 + dx / L * 0.55, y: a.y1 + dy / L * 0.55 });
+  hs.push({ k: 'dup', x: a.x2 - dx / L * 0.55, y: a.y2 - dy / L * 0.55 });
   return hs;
 }
 function hitArcHandle(sx, sy) {
@@ -626,6 +630,29 @@ function roundRectPath(g, cx, cy, hw, hh, sc, ox, oy) {
   g.closePath();
 }
 
+/* 図形のつまむところ。赤い✕＝削除、緑＝複製、青＝移動、白＝形を変える。 */
+function drawHandles(g, list, X, Y) {
+  for (const h of list) {
+    const s = 6, x = X(h.x), y = Y(h.y);
+    const col = h.k === 'del' ? '#c0392b' : h.k === 'dup' ? '#1e8449' : '#2b6cb0';
+    g.beginPath(); g.rect(x - s, y - s, s * 2, s * 2);
+    g.fillStyle = (h.k === 'del' || h.k === 'dup' || h.k === 'move') ? col : '#fff';
+    g.fill();
+    g.lineWidth = 2; g.strokeStyle = col; g.stroke();
+    g.strokeStyle = '#fff'; g.lineWidth = 2;
+    if (h.k === 'del') {
+      g.beginPath();
+      g.moveTo(x - 3, y - 3); g.lineTo(x + 3, y + 3);
+      g.moveTo(x + 3, y - 3); g.lineTo(x - 3, y + 3);
+      g.stroke();
+    } else if (h.k === 'dup') {
+      g.lineWidth = 1.5;
+      g.strokeRect(x - 4, y - 4, 5, 5);
+      g.strokeRect(x - 1, y - 1, 5, 5);
+    }
+  }
+}
+
 function paint(g, W, H, sc, ox, oy, opt) {
   opt = opt || {};
   const X = x => x * sc + ox, Y = y => y * sc + oy;
@@ -701,21 +728,7 @@ function paint(g, W, H, sc, ox, oy, opt) {
     }
     g.restore();
     if (!opt.out && ui.mode === 'circle') {
-      for (const c of circles) {
-        for (const h of circleHandles(c)) {
-          const s = 6, x = X(h.x), y = Y(h.y);
-          g.beginPath(); g.rect(x - s, y - s, s * 2, s * 2);
-          g.fillStyle = h.k === 'del' ? '#c0392b' : (h.k === 'move' ? '#2b6cb0' : '#fff');
-          g.fill();
-          g.lineWidth = 2; g.strokeStyle = h.k === 'del' ? '#c0392b' : '#2b6cb0'; g.stroke();
-          if (h.k === 'del') {
-            g.beginPath();
-            g.moveTo(x - 3, y - 3); g.lineTo(x + 3, y + 3);
-            g.moveTo(x + 3, y - 3); g.lineTo(x - 3, y + 3);
-            g.strokeStyle = '#fff'; g.lineWidth = 2; g.stroke();
-          }
-        }
-      }
+      for (const c of circles) drawHandles(g, circleHandles(c), X, Y);
     }
   }
 
@@ -735,21 +748,7 @@ function paint(g, W, H, sc, ox, oy, opt) {
     g.restore();
     /* つまむところは直線・曲線モードのときだけ出す */
     if (!opt.out && (ui.mode === 'arc' || ui.mode === 'line')) {
-      for (const a of arcs) {
-        for (const h of arcHandleList(a, ui.mode)) {
-          const s = 6, x = X(h.x), y = Y(h.y);
-          g.beginPath(); g.rect(x - s, y - s, s * 2, s * 2);
-          g.fillStyle = h.k === 'del' ? '#c0392b' : (h.k === 'move' ? '#2b6cb0' : '#fff');
-          g.fill();
-          g.lineWidth = 2; g.strokeStyle = h.k === 'del' ? '#c0392b' : '#2b6cb0'; g.stroke();
-          if (h.k === 'del') {
-            g.beginPath();
-            g.moveTo(x - 3, y - 3); g.lineTo(x + 3, y + 3);
-            g.moveTo(x + 3, y - 3); g.lineTo(x - 3, y + 3);
-            g.strokeStyle = '#fff'; g.lineWidth = 2; g.stroke();
-          }
-        }
-      }
+      for (const a of arcs) drawHandles(g, arcHandleList(a, ui.mode), X, Y);
     }
   }
 
@@ -871,9 +870,9 @@ function draw() {
     (drag && drag.type === 'paint' ? '連続配置中：そのまま引っぱると点が並びます'
                    : ui.markerEdit ? '目印編集中（クリックで追加・既存をクリックで削除）'
                    : ui.mode === 'place' ? '空きをクリックで配置／点をクリックで削除／点をドラッグで移動／長押しで連続配置'
-                   : ui.mode === 'circle' ? 'ドラッグで円を描く／円をクリックで人数を入れて等間隔に配置／□で移動・大きさ／✕で削除'
-                   : ui.mode === 'line' ? 'ドラッグで直線を引く／線をクリックで人数を入れて等間隔に配置／□で両端・移動／✕で削除'
-                   : ui.mode === 'arc' ? 'ドラッグで曲線を引く／線をクリックで人数を入れて等間隔に配置／□で両端・ふくらみ／✕で削除'
+                   : ui.mode === 'circle' ? 'ドラッグで円を描く／円をクリックで人数を配置／□で移動・大きさ／緑で複製／✕で削除'
+                   : ui.mode === 'line' ? 'ドラッグで直線を引く／線をクリックで人数を配置／□で両端・移動／緑で複製／✕で削除'
+                   : ui.mode === 'arc' ? 'ドラッグで曲線を引く／線をクリックで人数を配置／□で両端・ふくらみ／緑で複製／✕で削除'
                    : ui.mode === 'erase' ? 'ドラッグでなぞった点をまとめて削除'
                    : 'ドラッグで画面移動');
 }
@@ -955,6 +954,14 @@ cv.addEventListener('pointerdown', e => {
     const hh = hitCircleHandle(p.x, p.y);
     if (hh) {
       if (hh.k === 'del') { snapshot(); f.circles.splice(hh.i, 1); afterChange(); return; }
+      if (hh.k === 'dup') {
+        snapshot();
+        const o = f.circles[hh.i];
+        f.circles.push({ cx: o.cx + DUP_OFF, cy: o.cy + DUP_OFF, rx: o.rx, ry: o.ry });
+        afterChange();
+        flash2('同じ大きさの円を複製しました（点は写していません）');
+        return;
+      }
       snapshot();
       const c = f.circles[hh.i];
       drag = { type: 'circleH', i: hh.i, k: hh.k, moved: false,
@@ -977,6 +984,15 @@ cv.addEventListener('pointerdown', e => {
     const hh = hitArcHandle(p.x, p.y);
     if (hh) {
       if (hh.k === 'del') { snapshot(); f.arcs.splice(hh.i, 1); afterChange(); return; }
+      if (hh.k === 'dup') {
+        snapshot();
+        const o = f.arcs[hh.i];
+        f.arcs.push({ x1: o.x1 + DUP_OFF, y1: o.y1 + DUP_OFF,
+                      x2: o.x2 + DUP_OFF, y2: o.y2 + DUP_OFF, h: o.h });
+        afterChange();
+        flash2('同じ長さ・形の線を複製しました（点は写していません）');
+        return;
+      }
       snapshot();
       const a = f.arcs[hh.i];
       drag = { type: 'arcH', i: hh.i, k: hh.k, moved: false, ring: grabArcPts(a),
