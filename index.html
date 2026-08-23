@@ -408,13 +408,24 @@ function circleNearest(c, ux, uy) {
    円は「中心から見た角度」、曲線は「端からの割合」で覚えておき、
    図形が変わったあとに同じ位置へ置き直す。 */
 const RING_TOL = 0.2;                       // 図形の上とみなす幅（約0.75m）
+
+/* その図形の点かどうか。
+   図形の上に並べた点には `s`（図形の番号）を付けてある。
+   これがないと、図形どうしが重なったときに隣の図形の点まで連れて行ってしまう。
+   手で置いた点（`s` なし）は、近ければその図形のものとして扱う。 */
+function ownsPoint(shape, p, near) {
+  if (p.s) return p.s === shape.sid;
+  return near;
+}
+
 function grabRing(c) {
   const f = curF(), tb = circleTable(c, 360), out = [];
   f.points.forEach((p, idx) => {
     const r = nearestInTable(tb, p.x, p.y);
+    if (!ownsPoint(c, p, r.d <= RING_TOL)) return;
     /* 角度ではなく「一周のうち何割の位置か」で覚える。
        こうしておくと楕円につぶしても等間隔のまま保てる。 */
-    if (r.d <= RING_TOL) out.push({ idx, u: tb.len ? r.s / tb.len : 0 });
+    out.push({ idx, u: tb.len ? r.s / tb.len : 0 });
   });
   return out;
 }
@@ -431,7 +442,8 @@ function grabArcPts(a) {
   const f = curF(), tb = arcTable(a), out = [];
   f.points.forEach((p, idx) => {
     const r = nearestInTable(tb, p.x, p.y);
-    if (r.d <= RING_TOL) out.push({ idx, u: tb.len ? r.s / tb.len : 0 });
+    if (!ownsPoint(a, p, r.d <= RING_TOL)) return;
+    out.push({ idx, u: tb.len ? r.s / tb.len : 0 });
   });
   return out;
 }
@@ -957,7 +969,7 @@ cv.addEventListener('pointerdown', e => {
       if (hh.k === 'dup') {
         snapshot();
         const o = f.circles[hh.i];
-        f.circles.push({ cx: o.cx + DUP_OFF, cy: o.cy + DUP_OFF, rx: o.rx, ry: o.ry });
+        f.circles.push({ sid: nextId('s'), cx: o.cx + DUP_OFF, cy: o.cy + DUP_OFF, rx: o.rx, ry: o.ry });
         afterChange();
         flash2('同じ大きさの円を複製しました（点は写していません）');
         return;
@@ -972,7 +984,7 @@ cv.addEventListener('pointerdown', e => {
     if (ci >= 0) { drag = { type: 'circleTap', i: ci, px: 0, sx: p.x, sy: p.y }; return; }
     const u = { x: s2ux(p.x), y: s2uy(p.y) };
     snapshot();
-    f.circles.push({ cx: u.x, cy: u.y, rx: 0.01, ry: 0.01 });
+    f.circles.push({ sid: nextId('s'), cx: u.x, cy: u.y, rx: 0.01, ry: 0.01 });
     drag = { type: 'circleH', i: f.circles.length - 1, k: 'new', moved: true, isNew: true, sx: p.x, sy: p.y };
     afterChange();
     return;
@@ -987,7 +999,7 @@ cv.addEventListener('pointerdown', e => {
       if (hh.k === 'dup') {
         snapshot();
         const o = f.arcs[hh.i];
-        f.arcs.push({ x1: o.x1 + DUP_OFF, y1: o.y1 + DUP_OFF,
+        f.arcs.push({ sid: nextId('s'), x1: o.x1 + DUP_OFF, y1: o.y1 + DUP_OFF,
                       x2: o.x2 + DUP_OFF, y2: o.y2 + DUP_OFF, h: o.h });
         afterChange();
         flash2('同じ長さ・形の線を複製しました（点は写していません）');
@@ -1003,7 +1015,7 @@ cv.addEventListener('pointerdown', e => {
     if (ai >= 0) { drag = { type: 'arcTap', i: ai, px: 0, sx: p.x, sy: p.y }; return; }
     const u = { x: s2ux(p.x), y: s2uy(p.y) };
     snapshot();
-    f.arcs.push({ x1: u.x, y1: u.y, x2: u.x, y2: u.y, h: 0 });
+    f.arcs.push({ sid: nextId('s'), x1: u.x, y1: u.y, x2: u.x, y2: u.y, h: 0 });
     drag = { type: 'arcH', i: f.arcs.length - 1, k: 'x2y2', moved: true, isNew: true, sx: p.x, sy: p.y };
     afterChange();
     return;
@@ -1032,19 +1044,22 @@ cv.addEventListener('pointerdown', e => {
     const ci = hitCircle(p.x, p.y, 12);
     const ai = ci >= 0 ? -1 : hitArc(p.x, p.y, 12);
     let u, onArc = null, onCircle = false;
+    let sid = null;
     if (ci >= 0) {
       const r = circleNearest(curF().circles[ci], s2ux(p.x), s2uy(p.y));
       u = { x: r.p.x, y: r.p.y };
       onCircle = true;
+      sid = curF().circles[ci].sid;
     } else if (ai >= 0) {
       const r = arcNearest(curF().arcs[ai], s2ux(p.x), s2uy(p.y));
       u = { x: r.p.x, y: r.p.y };
       onArc = { i: ai, s: r.s };
+      sid = curF().arcs[ai].sid;
     } else {
       u = snapU(s2ux(p.x), s2uy(p.y));
     }
     snapshot();
-    curF().points.push({ x: u.x, y: u.y, cls: c.id });
+    curF().points.push({ x: u.x, y: u.y, cls: c.id, s: sid || undefined });
     drag = { type: 'point', idx: curF().points.length - 1, moved: true, isNew: true, sx: p.x, sy: p.y, px: 0, timer: null, onArc: onArc };
     /* 押したまま待つと「連続配置」に切り替わる（円の上は人数指定で並べるので対象外） */
     if (onCircle) { afterChange(); return; }
@@ -1073,7 +1088,8 @@ async function fillShape(kind, i) {
   const cls = curC();
   const tb = closed ? circleTable(o, 720) : arcTable(o, 480);
   const label = closed ? '円' : (Math.abs(o.h) < 0.05 ? '直線' : '曲線');
-  const onIt = p => nearestInTable(tb, p.x, p.y).d <= RING_TOL;
+  /* この図形のもの、と言えるものだけを並べ直す（重なった別の図形の点は触らない） */
+  const onIt = p => ownsPoint(o, p, nearestInTable(tb, p.x, p.y).d <= RING_TOL);
   const already = f.points.filter(p => p.cls === cls.id && onIt(p)).length;
   const other = f.points.filter(p => p.cls !== cls.id && onIt(p)).length;
   const room = cls.target > 0 ? cls.target - (countOf(cls.id) - already) : 999;
@@ -1096,7 +1112,7 @@ async function fillShape(kind, i) {
     const s = closed ? tb.len * k / n
                      : (n === 1 ? tb.len / 2 : tb.len * k / (n - 1));
     const q = arcPosAt(tb, s);
-    f.points.push({ x: q.x, y: q.y, cls: cls.id });
+    f.points.push({ x: q.x, y: q.y, cls: cls.id, s: o.sid });
   }
   afterChange();
   if (n > 1) {
@@ -1123,7 +1139,7 @@ function paintArcTo(ux, uy) {
     const s = k * step;
     if (s < 0 || s > r.tb.len) { drag.doneK.add(k); continue; }
     const q = arcPosAt(r.tb, s);
-    f.points.push({ x: q.x, y: q.y, cls: c.id });
+    f.points.push({ x: q.x, y: q.y, cls: c.id, s: a.sid });
     drag.doneK.add(k);
     added++;
   }
@@ -1456,9 +1472,9 @@ function dupF() {
   const i = S.formations.indexOf(f);
   S.formations.splice(i + 1, 0, {
     id, name: '隊形' + (S.formations.length + 1),
-    points: f.points.map(p => ({ x: p.x, y: p.y, cls: p.cls })),
-    arcs: (f.arcs || []).map(a => ({ x1: a.x1, y1: a.y1, x2: a.x2, y2: a.y2, h: a.h })),
-    circles: (f.circles || []).map(c => ({ cx: c.cx, cy: c.cy, rx: c.rx, ry: c.ry }))
+    points: f.points.map(p => ({ x: p.x, y: p.y, cls: p.cls, s: p.s })),
+    arcs: (f.arcs || []).map(a => ({ sid: a.sid, x1: a.x1, y1: a.y1, x2: a.x2, y2: a.y2, h: a.h })),
+    circles: (f.circles || []).map(c => ({ sid: c.sid, cx: c.cx, cy: c.cy, rx: c.rx, ry: c.ry }))
   });
   S.activeFormation = id;
   afterChange();
@@ -1680,14 +1696,26 @@ function normalize(o) {
   const s = Object.assign(freshState(), o);
   if (!Array.isArray(s.markers) || !s.markers.length) s.markers = defaultMarkers();
   if (!s.formations.length) s.formations = [{ id: 'f1', name: '隊形1', points: [], arcs: [], circles: [] }];
+  s.seq = Math.max(10, s.seq | 0);
   s.formations.forEach(f => {
     if (!Array.isArray(f.points)) f.points = [];
     if (!Array.isArray(f.arcs)) f.arcs = [];
     if (!Array.isArray(f.circles)) f.circles = [];
+    /* 図形に番号が無い古いデータを補う。番号が無いと、重なった図形どうしで
+       点の取り合いになる。 */
+    const shapes = f.arcs.map(a => ({ o: a, tb: arcTable(a, 240) }))
+              .concat(f.circles.map(c => ({ o: c, tb: circleTable(c, 240) })));
+    shapes.forEach(sh => { if (!sh.o.sid) { s.seq += 1; sh.o.sid = 's' + s.seq; } });
+    /* 古い点にも、乗っている図形を割り当てる。
+       2つ以上の図形にまたがる点はどちらのものか決められないので、そのままにする。 */
+    if (shapes.length) f.points.forEach(p => {
+      if (p.s) return;
+      const on = shapes.filter(sh => nearestInTable(sh.tb, p.x, p.y).d <= RING_TOL);
+      if (on.length === 1) p.s = on[0].o.sid;
+    });
   });
   if (!s.formations.some(f => f.id === s.activeFormation)) s.activeFormation = s.formations[0].id;
   if (!s.classes.some(c => c.id === s.activeClass)) s.activeClass = s.classes[0].id;
-  s.seq = Math.max(10, s.seq | 0);
   return s;
 }
 
