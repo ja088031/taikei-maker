@@ -188,6 +188,7 @@
   <div class="grp">
     <button id="fit">全体表示</button>
     <label class="chk"><input type="checkbox" id="mkEdit">目印を編集</label>
+    <label class="chk" title="上の「保護者席側」と下の「本部側」を入れ替えます"><input type="checkbox" id="flipS">上下入替</label>
   </div>
   <div class="grp">
     <button id="gal">一覧</button>
@@ -271,11 +272,16 @@ const GROUND = {
     { h: 8, a: -1.00, b: 9.00 },
     { h: 4, a: -6.10, b: 14.10 }
   ],
-  sides: [
-    { t: '保護者席側', y: -2.35 },
-    { t: '本部側',     y: 10.35 }
-  ]
+  sideY: { top: -2.35, bottom: 10.35 }
 };
+/* 上下の表示。入れ替えると文字だけが入れ替わる（点は動かない）。 */
+function sideLabels() {
+  const f = S && S.flipSides;
+  return [
+    { t: f ? '本部側' : '保護者席側', y: GROUND.sideY.top },
+    { t: f ? '保護者席側' : '本部側', y: GROUND.sideY.bottom }
+  ];
+}
 
 /* 目印どうしの間隔（実測 約3.75m） */
 const METERS = 3.75;
@@ -523,6 +529,7 @@ function freshState() {
     ],
     activeClass: 'c1',
     markers: defaultMarkers(),
+    flipSides: false,
     formations: [{ id: 'f1', name: '隊形1', points: [], arcs: [], circles: [] }],
     activeFormation: 'f1',
     seq: 10
@@ -670,7 +677,7 @@ function paint(g, W, H, sc, ox, oy, opt) {
   g.fillStyle = '#5a6b7f';
   const fs = Math.max(9, Math.min(34, sc * 0.62));
   g.font = '700 ' + fs.toFixed(1) + 'px "BIZ UDPGothic","Meiryo",sans-serif';
-  for (const D of GROUND.sides) g.fillText(D.t, X(GROUND.cx), Y(D.y));
+  for (const D of sideLabels()) g.fillText(D.t, X(GROUND.cx), Y(D.y));
 
   /* --- 目印 --- */
   const mr = opt.out ? Math.max(1.2, sc * 0.075) : Math.max(1.2, mkR() * (sc / view.scale));
@@ -1297,6 +1304,7 @@ function renderSide() {
   document.getElementById('total').textContent = '合計 ' + tot + (tgt ? ' / ' + tgt : '') + ' 人';
   document.getElementById('undo').disabled = !undoStack.length;
   document.getElementById('redo').disabled = !redoStack.length;
+  document.getElementById('flipS').checked = !!S.flipSides;
 }
 
 /* クラス名・人数・色を1画面で編集する */
@@ -1692,6 +1700,11 @@ document.getElementById('gShow').onchange = e => { ui.grid = e.target.checked; d
 document.getElementById('gDiv').onchange = e => { ui.div = parseInt(e.target.value, 10); draw(); };
 document.getElementById('gSnap').onchange = e => { ui.snap = e.target.checked; };
 document.getElementById('mkEdit').onchange = e => { ui.markerEdit = e.target.checked; draw(); };
+document.getElementById('flipS').onchange = e => {
+  snapshot();
+  S.flipSides = e.target.checked;   /* 図面の向きなので、隊形データと一緒に保存する */
+  afterChange();
+};
 document.getElementById('undo').onclick = undo;
 document.getElementById('redo').onclick = redo;
 document.getElementById('fit').onclick = () => { userMoved = false; fitView(); draw(); };
