@@ -1,0 +1,1726 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>隊形メーカー</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; overscroll-behavior: none; }
+  body {
+    font-family: "BIZ UDPGothic", "Meiryo", "Hiragino Kaku Gothic ProN", sans-serif;
+    background: #eef1f5; color: #1b2430;
+    display: flex; flex-direction: column;
+    -webkit-user-select: none; user-select: none;
+  }
+
+  /* ---------- toolbar ---------- */
+  #bar {
+    flex: 0 0 auto; background: #fff; border-bottom: 1px solid #c9d2dd;
+    padding: 6px 10px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  }
+  #bar .grp { display: flex; align-items: center; gap: 6px; }
+  #bar .grp + .grp { border-left: 1px solid #dde3ea; padding-left: 14px; }
+  .lbl { font-size: 12px; color: #5a6b7f; }
+  button {
+    font: inherit; font-size: 13px; padding: 5px 11px; border-radius: 7px;
+    border: 1px solid #c2ccd8; background: #fff; color: #1b2430; cursor: pointer;
+    min-height: 34px;
+  }
+  button:hover { background: #f3f6fa; }
+  button:disabled { opacity: .4; cursor: default; }
+  button.on { background: #2b6cb0; border-color: #2b6cb0; color: #fff; }
+  select, input[type=number], input[type=text] {
+    font: inherit; font-size: 13px; padding: 4px 6px; border-radius: 6px;
+    border: 1px solid #c2ccd8; background: #fff; min-height: 32px;
+  }
+  label.chk { display: flex; align-items: center; gap: 4px; font-size: 13px; cursor: pointer; }
+  input[type=checkbox] { width: 17px; height: 17px; }
+
+  /* ---------- layout ---------- */
+  #main { flex: 1 1 auto; display: flex; min-height: 0; }
+  #stage { flex: 1 1 auto; position: relative; min-width: 0; background: #fff; }
+  #cv { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; display: block; }
+  #hint {
+    position: absolute; left: 10px; bottom: 8px; font-size: 12px; color: #7b8a9c;
+    background: rgba(255,255,255,.85); padding: 3px 8px; border-radius: 6px; pointer-events: none;
+  }
+
+  /* ---------- side ---------- */
+  #side {
+    flex: 0 0 232px; background: #fff; border-left: 1px solid #c9d2dd;
+    display: flex; flex-direction: column; overflow-y: auto;
+  }
+  #side h2 { font-size: 12px; color: #5a6b7f; margin: 12px 12px 6px; font-weight: 600; }
+  .cls {
+    display: flex; align-items: center; gap: 7px; padding: 5px 10px; cursor: pointer;
+    border-left: 4px solid transparent;
+  }
+  .cls:hover { background: #f5f8fb; }
+  .cls.sel { background: #eaf2fb; border-left-color: #2b6cb0; }
+  .sw { width: 17px; height: 17px; border-radius: 50%; flex: 0 0 auto; border: 1px solid rgba(0,0,0,.2); }
+  .cls .nm { flex: 1 1 auto; font-size: 13px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cls .ct { font-size: 12px; color: #5a6b7f; font-variant-numeric: tabular-nums; }
+  .cls .ct.over { color: #c0392b; font-weight: 700; }
+  .cls .ct.ok { color: #1e8449; font-weight: 700; }
+  #total { margin: 8px 12px 12px; font-size: 13px; color: #33445a; }
+  #sideBtns { margin: 0 10px 4px; display: flex; gap: 6px; }
+  #sideBtns button { flex: 1 1 0; font-size: 12px; padding: 5px 4px; }
+  #sideBtns2 { margin: 0 10px 14px; display: flex; flex-direction: column; gap: 6px; }
+  #sideBtns2 button { font-size: 12px; padding: 6px 4px; }
+
+  /* ---------- tabs ---------- */
+  #tabs {
+    flex: 0 0 auto; background: #fff; border-top: 1px solid #c9d2dd;
+    padding: 6px 10px; display: flex; align-items: center; gap: 6px; overflow-x: auto;
+  }
+  .tab {
+    padding: 6px 12px; border-radius: 7px 7px 0 0; border: 1px solid #c2ccd8; border-bottom: none;
+    background: #f1f4f8; font-size: 13px; cursor: pointer; white-space: nowrap; min-height: 34px;
+  }
+  .tab.sel { background: #2b6cb0; border-color: #2b6cb0; color: #fff; font-weight: 600; }
+  #tabs .sep { width: 1px; height: 26px; background: #dde3ea; margin: 0 4px; flex: 0 0 auto; }
+
+  /* ---------- modal ---------- */
+  #modal {
+    position: fixed; inset: 0; background: rgba(20,28,38,.5); display: none;
+    align-items: center; justify-content: center; padding: 20px; z-index: 50;
+  }
+  #modal.show { display: flex; }
+  #box {
+    background: #fff; border-radius: 12px; padding: 16px; width: min(620px, 100%);
+    max-height: 90%; display: flex; flex-direction: column; gap: 10px;
+  }
+  #box h3 { margin: 0; font-size: 15px; }
+  #box p { margin: 0; font-size: 12px; color: #5a6b7f; line-height: 1.6; }
+  #ta {
+    width: 100%; height: 240px; font-family: ui-monospace, Consolas, monospace; font-size: 11px;
+    border: 1px solid #c2ccd8; border-radius: 8px; padding: 8px; resize: vertical;
+    -webkit-user-select: text; user-select: text;
+  }
+  #box .row { display: flex; gap: 8px; justify-content: flex-end; }
+  #tin { font-size: 15px; padding: 8px 10px; -webkit-user-select: text; user-select: text; }
+  #box p { white-space: pre-line; }
+  #cform { display: flex; flex-direction: column; gap: 10px; }
+  #cform .fr { display: flex; align-items: center; gap: 10px; }
+  #cform .fr > span { flex: 0 0 64px; font-size: 13px; color: #5a6b7f; }
+  #cform .fr > em { font-size: 11px; color: #8896a8; font-style: normal; }
+  #cform input { flex: 0 1 auto; font-size: 15px; padding: 7px 9px; -webkit-user-select: text; user-select: text; }
+  #cfName { width: 190px; }
+  #cfNum { width: 96px; }
+  #cfColors { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
+  .cc {
+    display: flex; align-items: center; gap: 7px; padding: 7px 8px; cursor: pointer;
+    border: 2px solid #dde3ea; border-radius: 9px; font-size: 13px; background: #fff;
+  }
+  .cc:hover { border-color: #a8b6c6; }
+  .cc.sel { border-color: #2b6cb0; background: #eaf2fb; font-weight: 700; }
+  .cc i { width: 19px; height: 19px; border-radius: 50%; flex: 0 0 auto; border: 1px solid rgba(0,0,0,.18); }
+  #hint.warn { color: #fff; background: #c0392b; font-weight: 700; }
+  #hint.info { color: #fff; background: #2b6cb0; font-weight: 700; }
+
+  /* ---------- 一覧 ---------- */
+  #gallery {
+    position: fixed; inset: 0; background: rgba(20,28,38,.55); display: none;
+    align-items: center; justify-content: center; padding: 16px; z-index: 40;
+  }
+  #gallery.show { display: flex; }
+  #galIn {
+    background: #fff; border-radius: 12px; width: min(1200px, 100%); max-height: 100%;
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  #galBar { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-bottom: 1px solid #dde3ea; }
+  #galBar b { font-size: 15px; }
+  #galBar span { font-size: 12px; color: #7b8a9c; flex: 1 1 auto; }
+  #galGrid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px; padding: 14px; overflow-y: auto;
+  }
+  .gcard { border: 2px solid #dde3ea; border-radius: 10px; overflow: hidden; cursor: pointer; background: #fff; }
+  .gcard:hover { border-color: #2b6cb0; }
+  .gcard.sel { border-color: #2b6cb0; box-shadow: 0 0 0 2px rgba(43,108,176,.2); }
+  .gcard img { width: 100%; display: block; }
+  .gcard .cap { padding: 6px 9px; font-size: 13px; display: flex; justify-content: space-between; gap: 8px; }
+  .gcard .cap em { font-style: normal; color: #7b8a9c; font-size: 12px; }
+
+  /* ---------- 印刷 ---------- */
+  #printArea { display: none; }
+  @media print {
+    body > *:not(#printArea) { display: none !important; }
+    body { background: #fff; display: block; }
+    #printArea { display: block; }
+    .pg { page-break-after: always; break-after: page; text-align: center; }
+    .pg:last-child { page-break-after: auto; break-after: auto; }
+    .pg img { width: 100%; height: auto; }
+    @page { size: A4 landscape; margin: 8mm; }
+  }
+</style>
+</head>
+<body>
+
+<div id="bar">
+  <div class="grp">
+    <button id="mPlace" class="on">編集</button>
+    <button id="mCircle">円</button>
+    <button id="mLine">直線</button>
+    <button id="mArc">曲線</button>
+    <button id="mErase">なぞって消す</button>
+    <button id="mPan">画面移動</button>
+  </div>
+  <div class="grp">
+    <label class="chk"><input type="checkbox" id="oNum">番号</label>
+    <label class="chk"><input type="checkbox" id="oOnion">前の隊形</label>
+  </div>
+  <div class="grp">
+    <label class="chk"><input type="checkbox" id="gShow" checked>グリッド</label>
+    <select id="gDiv" title="目印の間隔（約3.75m）を何等分するか">
+      <option value="1">1マス 3.75m</option>
+      <option value="2" selected>1マス 1.88m</option>
+      <option value="3">1マス 1.25m</option>
+      <option value="4">1マス 0.94m</option>
+    </select>
+    <label class="chk"><input type="checkbox" id="gSnap" checked>吸着</label>
+  </div>
+  <div class="grp">
+    <button id="undo" title="Ctrl+Z">元に戻す</button>
+    <button id="redo" title="Ctrl+Y">やり直し</button>
+  </div>
+  <div class="grp">
+    <button id="fit">全体表示</button>
+    <label class="chk"><input type="checkbox" id="mkEdit">目印を編集</label>
+  </div>
+  <div class="grp">
+    <button id="gal">一覧</button>
+    <button id="png">画像で保存</button>
+    <button id="print">印刷</button>
+  </div>
+  <div class="grp">
+    <button id="save">書き出し</button>
+    <button id="load">読み込み</button>
+    <button id="text">テキスト</button>
+  </div>
+</div>
+
+<div id="main">
+  <div id="stage">
+    <canvas id="cv"></canvas>
+    <div id="hint"></div>
+  </div>
+  <div id="side">
+    <h2>クラス</h2>
+    <div id="clsList"></div>
+    <div id="total"></div>
+    <div id="sideBtns">
+      <button id="clsAdd">追加</button>
+      <button id="clsEdit">編集</button>
+      <button id="clsDel">削除</button>
+    </div>
+    <h2>まとめて消す</h2>
+    <div id="sideBtns2">
+      <button id="delCls">選んだクラスの点</button>
+      <button id="delAll">この隊形の点すべて</button>
+      <button id="delArc">この隊形の円・曲線すべて</button>
+    </div>
+  </div>
+</div>
+
+<div id="tabs"></div>
+
+<div id="modal"><div id="box">
+  <h3 id="bTitle"></h3>
+  <p id="bDesc"></p>
+  <input id="tin" type="text">
+  <textarea id="ta" spellcheck="false"></textarea>
+  <div id="cform">
+    <div class="fr"><span>クラス名</span><input id="cfName" type="text"></div>
+    <div class="fr"><span>人数</span><input id="cfNum" type="number" min="0" max="300" step="1"><em>0にすると人数の上限なし</em></div>
+    <div class="fr"><span>色</span></div>
+    <div id="cfColors"></div>
+  </div>
+  <div class="row">
+    <button id="bCancel">キャンセル</button>
+    <button id="bAlt"></button>
+    <button id="bOk" class="on">OK</button>
+  </div>
+</div></div>
+
+<div id="printArea"></div>
+
+<div id="gallery"><div id="galIn">
+  <div id="galBar"><b>隊形の一覧</b><span>クリックするとその隊形に移ります</span><button id="galX">閉じる</button></div>
+  <div id="galGrid"></div>
+</div></div>
+
+<script>
+"use strict";
+
+/* =========================================================================
+   運動場の図面（焼き込み）
+   単位 = 目印どうしの間隔（1 unit）。原点は左上の目印。
+   格子の中心は (4,4) = 中央の縦線と横線の交点。
+   ========================================================================= */
+const GROUND = {
+  cx: 4, cy: 4,
+  outer: { hw: 10.10, hh: 5.65 },   // トラック外周
+  inner: { hw:  9.00, hh: 4.75 },   // トラック内周
+  lines: [
+    { v: 0, a: -1.65, b: 9.65 },
+    { v: 4, a: -1.65, b: 9.65 },
+    { v: 8, a: -1.65, b: 9.65 },
+    { h: 0, a: -1.00, b: 9.00 },
+    { h: 8, a: -1.00, b: 9.00 },
+    { h: 4, a: -6.10, b: 14.10 }
+  ],
+  sides: [
+    { t: '保護者席側', y: -2.35 },
+    { t: '本部側',     y: 10.35 }
+  ]
+};
+
+/* 目印どうしの間隔（実測 約3.75m） */
+const METERS = 3.75;
+
+function defaultMarkers() {
+  const seen = new Set(), out = [];
+  const add = (x, y) => { const k = x + ',' + y; if (!seen.has(k)) { seen.add(k); out.push({ x, y }); } };
+  for (let c = 0; c <= 8; c++) { add(c, 0); add(c, 4); add(c, 8); }
+  for (let r = 0; r <= 8; r++) { add(0, r); add(4, r); add(8, r); }
+  add(-2, 4); add(10, 4);
+  add(2, 2); add(6, 2); add(2, 6); add(6, 6);
+  return out;
+}
+
+/* 図面全体（トラック＋上下の方向表示）が入る範囲 */
+const WORLD = { x1: -6.8, y1: -2.9, x2: 14.8, y2: 10.9 };
+
+/* 色は名前で選ぶ（コードは内部だけで使う） */
+const COLORS = [
+  ['オレンジ', '#E8A33D'], ['きいろ', '#EFC421'], ['あか',   '#E03030'], ['ピンク', '#E040A0'],
+  ['むらさき', '#8E44AD'], ['あお',   '#2090E0'], ['みずいろ', '#40C8DC'], ['こん',   '#1030C0'],
+  ['みどり',  '#2E9E5B'], ['きみどり', '#7CBB3A'], ['ちゃ',   '#A0522D'], ['はいいろ', '#7F8C8D']
+];
+const PALETTE = COLORS.map(c => c[1]);
+/* 明るい色の上では白文字が読めないので、文字色を切り替えるのに使う */
+function isLight(hex) {
+  const n = parseInt(String(hex).slice(1), 16);
+  if (isNaN(n)) return false;
+  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  return (0.299 * r + 0.587 * g + 0.114 * b) > 165;
+}
+function colorName(hex) {
+  const f = COLORS.find(c => c[1].toLowerCase() === String(hex).toLowerCase());
+  return f ? f[0] : hex;
+}
+
+/* =========================================================================
+   状態
+   ========================================================================= */
+const KEY = 'taikei-app-v1';
+let S = null;                                  // 保存される状態
+let view = { ox: 0, oy: 0, scale: 40 };        // 表示（保存しない）
+let ui = { mode: 'place', grid: true, div: 2, snap: true, markerEdit: false, num: false, onion: false };
+
+/* =========================================================================
+   曲線（2次ベジエ）。両端 P1・P2 と、中央のふくらみ h で決まる。
+   点を乗せるための補助線で、グリッドには吸着しない。
+   ========================================================================= */
+function arcNormal(a) {
+  const dx = a.x2 - a.x1, dy = a.y2 - a.y1, L = Math.hypot(dx, dy) || 1;
+  return { nx: -dy / L, ny: dx / L, mx: (a.x1 + a.x2) / 2, my: (a.y1 + a.y2) / 2 };
+}
+function arcCtrl(a) {
+  const n = arcNormal(a);
+  return { x: n.mx + 2 * a.h * n.nx, y: n.my + 2 * a.h * n.ny };
+}
+function arcHandle(a) {                    // ふくらみをつまむ位置（曲線上の中点）
+  const n = arcNormal(a);
+  return { x: n.mx + a.h * n.nx, y: n.my + a.h * n.ny };
+}
+function arcSetHandle(a, ux, uy) {
+  const n = arcNormal(a);
+  a.h = (ux - n.mx) * n.nx + (uy - n.my) * n.ny;
+}
+function arcAt(a, t) {
+  const c = arcCtrl(a), u = 1 - t;
+  return { x: u * u * a.x1 + 2 * u * t * c.x + t * t * a.x2,
+           y: u * u * a.y1 + 2 * u * t * c.y + t * t * a.y2 };
+}
+/* 弧長つきの標本表。曲線に沿って等間隔に並べるために使う。 */
+function arcTable(a, n) {
+  n = n || 240;
+  const pts = [], cum = [0];
+  for (let i = 0; i <= n; i++) pts.push(arcAt(a, i / n));
+  for (let i = 1; i <= n; i++) cum.push(cum[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y));
+  return { pts, cum, len: cum[n] };
+}
+function arcPosAt(tb, s) {                 // 弧長 s の位置
+  const c = tb.cum;
+  s = Math.max(0, Math.min(tb.len, s));
+  let lo = 0, hi = c.length - 1;
+  while (lo < hi - 1) { const m = (lo + hi) >> 1; if (c[m] <= s) lo = m; else hi = m; }
+  const seg = c[hi] - c[lo] || 1, k = (s - c[lo]) / seg;
+  return { x: tb.pts[lo].x + (tb.pts[hi].x - tb.pts[lo].x) * k,
+           y: tb.pts[lo].y + (tb.pts[hi].y - tb.pts[lo].y) * k };
+}
+function arcNearest(a, ux, uy) {           // 一番近い曲線上の位置と、その弧長
+  const tb = arcTable(a);
+  let bi = 0, bd = Infinity;
+  for (let i = 0; i < tb.pts.length; i++) {
+    const d = (tb.pts[i].x - ux) ** 2 + (tb.pts[i].y - uy) ** 2;
+    if (d < bd) { bd = d; bi = i; }
+  }
+  return { p: tb.pts[bi], s: tb.cum[bi], d: Math.sqrt(bd), tb };
+}
+/* =========================================================================
+   円（楕円）。中心と縦横の半径で持つ。人を等間隔に並べるための図形。
+   ========================================================================= */
+function circleTable(c, n) {
+  n = n || 360;
+  const pts = [], cum = [0];
+  for (let i = 0; i <= n; i++) {
+    const t = i / n * Math.PI * 2 - Math.PI / 2;
+    pts.push({ x: c.cx + c.rx * Math.cos(t), y: c.cy + c.ry * Math.sin(t) });
+  }
+  for (let i = 1; i <= n; i++) cum.push(cum[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y));
+  return { pts, cum, len: cum[n] };
+}
+function nearestInTable(tb, ux, uy) {
+  let bi = 0, bd = Infinity;
+  for (let i = 0; i < tb.pts.length; i++) {
+    const d = (tb.pts[i].x - ux) ** 2 + (tb.pts[i].y - uy) ** 2;
+    if (d < bd) { bd = d; bi = i; }
+  }
+  return { p: tb.pts[bi], s: tb.cum[bi], d: Math.sqrt(bd) };
+}
+function circleNearest(c, ux, uy) {
+  const tb = circleTable(c, 240);
+  const r = nearestInTable(tb, ux, uy);
+  return { p: r.p, d: r.d, tb };
+}
+
+/* 図形を動かしたら、その上に乗っている点も一緒に動かす。
+   円は「中心から見た角度」、曲線は「端からの割合」で覚えておき、
+   図形が変わったあとに同じ位置へ置き直す。 */
+const RING_TOL = 0.2;                       // 図形の上とみなす幅（約0.75m）
+function grabRing(c) {
+  const f = curF(), tb = circleTable(c, 360), out = [];
+  f.points.forEach((p, idx) => {
+    const r = nearestInTable(tb, p.x, p.y);
+    /* 角度ではなく「一周のうち何割の位置か」で覚える。
+       こうしておくと楕円につぶしても等間隔のまま保てる。 */
+    if (r.d <= RING_TOL) out.push({ idx, u: tb.len ? r.s / tb.len : 0 });
+  });
+  return out;
+}
+function applyRing(c, list) {
+  const f = curF(), tb = circleTable(c, 360);
+  for (const it of list) {
+    const p = f.points[it.idx];
+    if (!p) continue;
+    const q = arcPosAt(tb, it.u * tb.len);
+    p.x = q.x; p.y = q.y;
+  }
+}
+function grabArcPts(a) {
+  const f = curF(), tb = arcTable(a), out = [];
+  f.points.forEach((p, idx) => {
+    const r = nearestInTable(tb, p.x, p.y);
+    if (r.d <= RING_TOL) out.push({ idx, u: tb.len ? r.s / tb.len : 0 });
+  });
+  return out;
+}
+function applyArcPts(a, list) {
+  const f = curF(), tb = arcTable(a);
+  for (const it of list) {
+    const p = f.points[it.idx];
+    if (!p) continue;
+    const q = arcPosAt(tb, it.u * tb.len);
+    p.x = q.x; p.y = q.y;
+  }
+}
+function hitCircle(sx, sy, tolPx) {
+  const f = curF(), cs = f.circles || [];
+  const tol = (tolPx || 10) / view.scale;
+  for (let i = cs.length - 1; i >= 0; i--) {
+    if (circleNearest(cs[i], s2ux(sx), s2uy(sy)).d <= tol) return i;
+  }
+  return -1;
+}
+function circleHandles(c) {
+  return [
+    { k: 'move', x: c.cx, y: c.cy },
+    { k: 'rx', x: c.cx + c.rx, y: c.cy },
+    { k: 'ry', x: c.cx, y: c.cy + c.ry },
+    { k: 'del', x: c.cx - c.rx * 0.7071, y: c.cy - c.ry * 0.7071 }
+  ];
+}
+function hitCircleHandle(sx, sy) {
+  const f = curF(), cs = f.circles || [], tol = 12;
+  for (let i = cs.length - 1; i >= 0; i--) {
+    for (const h of circleHandles(cs[i])) {
+      if (Math.hypot(u2sx(h.x) - sx, u2sy(h.y) - sy) <= tol) return { i, k: h.k };
+    }
+  }
+  return null;
+}
+/* 円の寸法を実寸で説明する文字列 */
+function circleInfo(c) {
+  const tb = circleTable(c, 720);
+  const dW = (c.rx * 2 * METERS), dH = (c.ry * 2 * METERS), len = tb.len * METERS;
+  const cc = curC();
+  let s = (Math.abs(dW - dH) < 0.4 ? '直径 ' + dW.toFixed(1) + 'm' : '横 ' + dW.toFixed(1) + 'm × 縦 ' + dH.toFixed(1) + 'm')
+        + ' ／ 一周 ' + len.toFixed(1) + 'm';
+  if (cc && cc.target > 0) s += ' ／ ' + cc.name + ' ' + cc.target + '人なら間隔 ' + (len / cc.target).toFixed(2) + 'm';
+  return s;
+}
+
+/* 画面上で曲線に近いか（近ければその番号を返す） */
+function hitArc(sx, sy, tolPx) {
+  const f = curF(), arcs = f.arcs || [];
+  const tol = (tolPx || 10) / view.scale;
+  for (let i = arcs.length - 1; i >= 0; i--) {
+    const r = arcNearest(arcs[i], s2ux(sx), s2uy(sy));
+    if (r.d <= tol) return i;
+  }
+  return -1;
+}
+/* つまむところ。直線モードでは中央が「移動」、曲線モードでは「ふくらみ」になる。 */
+function arcHandleList(a, mode) {
+  const hs = [{ k: 'x1y1', x: a.x1, y: a.y1 }, { k: 'x2y2', x: a.x2, y: a.y2 }];
+  if (mode === 'arc') { const m = arcHandle(a); hs.push({ k: 'mid', x: m.x, y: m.y }); }
+  else hs.push({ k: 'move', x: (a.x1 + a.x2) / 2, y: (a.y1 + a.y2) / 2 });
+  const dx = a.x1 - a.x2, dy = a.y1 - a.y2, L = Math.hypot(dx, dy) || 1;
+  hs.push({ k: 'del', x: a.x1 + dx / L * 0.55, y: a.y1 + dy / L * 0.55 });
+  return hs;
+}
+function hitArcHandle(sx, sy) {
+  const f = curF(), arcs = f.arcs || [], tol = 12;
+  for (let i = arcs.length - 1; i >= 0; i--) {
+    for (const h of arcHandleList(arcs[i], ui.mode)) {
+      if (Math.hypot(u2sx(h.x) - sx, u2sy(h.y) - sy) <= tol) return { i, k: h.k };
+    }
+  }
+  return null;
+}
+function arcInfo(a) {
+  const len = arcTable(a, 480).len * METERS;
+  const cc = curC();
+  let s = '長さ ' + len.toFixed(1) + 'm';
+  if (cc && cc.target > 1) s += ' ／ ' + cc.name + ' ' + cc.target + '人なら間隔 ' + (len / (cc.target - 1)).toFixed(2) + 'm';
+  return s;
+}
+let undoStack = [], redoStack = [];
+let userMoved = false;   // 自分で拡大・移動したか（していなければ常に全体表示）
+
+function freshState() {
+  return {
+    version: 1,
+    classes: [
+      { id: 'c1', name: '3の1', color: '#E8A33D', target: 26 },
+      { id: 'c2', name: '3の2', color: '#E040A0', target: 26 },
+      { id: 'c3', name: '4の1', color: '#40C8DC', target: 35 },
+      { id: 'c4', name: '4の2', color: '#2090E0', target: 34 }
+    ],
+    activeClass: 'c1',
+    markers: defaultMarkers(),
+    formations: [{ id: 'f1', name: '隊形1', points: [], arcs: [], circles: [] }],
+    activeFormation: 'f1',
+    seq: 10
+  };
+}
+
+function nextId(p) { S.seq += 1; return p + S.seq; }
+function curF() { return S.formations.find(f => f.id === S.activeFormation) || S.formations[0]; }
+function curC() { return S.classes.find(c => c.id === S.activeClass) || S.classes[0]; }
+
+/* =========================================================================
+   保存 / 取り消し
+   ========================================================================= */
+function persist() {
+  try { localStorage.setItem(KEY, JSON.stringify(S)); }
+  catch (e) { console.warn('保存に失敗', e); }
+}
+function snapshot() {
+  undoStack.push(JSON.stringify(S));
+  if (undoStack.length > 60) undoStack.shift();
+  redoStack.length = 0;
+}
+function undo() {
+  if (!undoStack.length) return;
+  redoStack.push(JSON.stringify(S));
+  S = JSON.parse(undoStack.pop());
+  afterChange();
+}
+function redo() {
+  if (!redoStack.length) return;
+  undoStack.push(JSON.stringify(S));
+  S = JSON.parse(redoStack.pop());
+  afterChange();
+}
+function afterChange() { persist(); renderSide(); renderTabs(); draw(); }
+
+/* =========================================================================
+   座標変換
+   ========================================================================= */
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+let cssW = 0, cssH = 0;
+
+function u2sx(x) { return x * view.scale + view.ox; }
+function u2sy(y) { return y * view.scale + view.oy; }
+function s2ux(x) { return (x - view.ox) / view.scale; }
+function s2uy(y) { return (y - view.oy) / view.scale; }
+
+function fitView() {
+  const w = WORLD.x2 - WORLD.x1, h = WORLD.y2 - WORLD.y1;
+  const s = Math.min(cssW / w, cssH / h) * 0.97;
+  view.scale = s;
+  view.ox = (cssW - w * s) / 2 - WORLD.x1 * s;
+  view.oy = (cssH - h * s) / 2 - WORLD.y1 * s;
+}
+
+function resize() {
+  const r = cv.getBoundingClientRect();
+  cssW = Math.max(1, r.width); cssH = Math.max(1, r.height);
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  cv.width = Math.round(cssW * dpr); cv.height = Math.round(cssH * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+function gridStep() { return 1 / ui.div; }
+function snapU(x, y) {
+  if (!ui.snap) return { x, y };
+  const g = gridStep();
+  return { x: Math.round(x / g) * g, y: Math.round(y / g) * g };
+}
+
+/* 点の半径（画面px）。指でも掴める下限を確保する。 */
+function ptR() { return Math.max(3.5, Math.min(13, view.scale * 0.15)); }
+function mkR()  { return Math.max(1.6, Math.min(5, view.scale * 0.075)); }
+
+/* =========================================================================
+   描画
+   ========================================================================= */
+function roundRectPath(g, cx, cy, hw, hh, sc, ox, oy) {
+  const r = Math.min(hw, hh);
+  const x1 = (cx - hw) * sc + ox, x2 = (cx + hw) * sc + ox;
+  const y1 = (cy - hh) * sc + oy, y2 = (cy + hh) * sc + oy;
+  const rr = r * sc;
+  g.beginPath();
+  g.moveTo(x1 + rr, y1);
+  g.lineTo(x2 - rr, y1);
+  g.arcTo(x2, y1, x2, y1 + rr, rr);
+  g.lineTo(x2, y2 - rr);
+  g.arcTo(x2, y2, x2 - rr, y2, rr);
+  g.lineTo(x1 + rr, y2);
+  g.arcTo(x1, y2, x1, y2 - rr, rr);
+  g.lineTo(x1, y1 + rr);
+  g.arcTo(x1, y1, x1 + rr, y1, rr);
+  g.closePath();
+}
+
+function paint(g, W, H, sc, ox, oy, opt) {
+  opt = opt || {};
+  const X = x => x * sc + ox, Y = y => y * sc + oy;
+
+  g.fillStyle = '#ffffff';
+  g.fillRect(0, 0, W, H);
+
+  /* --- グリッド --- */
+  if (ui.grid && !opt.noGrid) {
+    const step = gridStep();
+    const px = step * sc;
+    if (px >= 5) {
+      /* 出力は幅2200px。1pxではA4に印刷すると消えるので太さを合わせる */
+      g.strokeStyle = opt.out ? '#dfe5ec' : (px < 10 ? '#f0f2f5' : '#e6eaef');
+      g.lineWidth = opt.out ? Math.max(1, W / 1100) : 1;
+      g.beginPath();
+      const gx1 = Math.ceil(WORLD.x1 / step) * step, gx2 = WORLD.x2;
+      for (let x = gx1; x <= gx2 + 1e-9; x += step) {
+        const sx = Math.round(X(x)) + 0.5;
+        if (sx < -2 || sx > W + 2) continue;
+        g.moveTo(sx, Y(WORLD.y1)); g.lineTo(sx, Y(WORLD.y2));
+      }
+      const gy1 = Math.ceil(WORLD.y1 / step) * step, gy2 = WORLD.y2;
+      for (let y = gy1; y <= gy2 + 1e-9; y += step) {
+        const sy = Math.round(Y(y)) + 0.5;
+        if (sy < -2 || sy > H + 2) continue;
+        g.moveTo(X(WORLD.x1), sy); g.lineTo(X(WORLD.x2), sy);
+      }
+      g.stroke();
+    }
+  }
+
+  /* --- トラック --- */
+  g.strokeStyle = '#9db4d8';
+  g.lineWidth = Math.max(1, sc * 0.035);
+  roundRectPath(g, GROUND.cx, GROUND.cy, GROUND.outer.hw, GROUND.outer.hh, sc, ox, oy); g.stroke();
+  roundRectPath(g, GROUND.cx, GROUND.cy, GROUND.inner.hw, GROUND.inner.hh, sc, ox, oy); g.stroke();
+
+  /* --- 白線 --- */
+  g.beginPath();
+  for (const L of GROUND.lines) {
+    if (L.v !== undefined) { g.moveTo(X(L.v), Y(L.a)); g.lineTo(X(L.v), Y(L.b)); }
+    else { g.moveTo(X(L.a), Y(L.h)); g.lineTo(X(L.b), Y(L.h)); }
+  }
+  g.stroke();
+
+  /* --- 上下の方向表示 --- */
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillStyle = '#5a6b7f';
+  const fs = Math.max(9, Math.min(34, sc * 0.62));
+  g.font = '700 ' + fs.toFixed(1) + 'px "BIZ UDPGothic","Meiryo",sans-serif';
+  for (const D of GROUND.sides) g.fillText(D.t, X(GROUND.cx), Y(D.y));
+
+  /* --- 目印 --- */
+  const mr = opt.out ? Math.max(1.2, sc * 0.075) : Math.max(1.2, mkR() * (sc / view.scale));
+  g.fillStyle = ui.markerEdit ? '#c0392b' : '#5c6b7d';
+  for (const m of S.markers) {
+    g.beginPath(); g.arc(X(m.x), Y(m.y), mr, 0, Math.PI * 2); g.fill();
+  }
+
+  /* --- 円（人を並べるための図形） --- */
+  const fArc = opt.formation || curF();
+  const circles = fArc.circles || [];
+  if (circles.length) {
+    g.save();
+    g.strokeStyle = '#9aabbe';
+    g.lineWidth = Math.max(1, sc * 0.022);
+    g.setLineDash([sc * 0.16, sc * 0.13]);
+    for (const c of circles) {
+      g.beginPath();
+      g.ellipse(X(c.cx), Y(c.cy), c.rx * sc, c.ry * sc, 0, 0, Math.PI * 2);
+      g.stroke();
+    }
+    g.restore();
+    if (!opt.out && ui.mode === 'circle') {
+      for (const c of circles) {
+        for (const h of circleHandles(c)) {
+          const s = 6, x = X(h.x), y = Y(h.y);
+          g.beginPath(); g.rect(x - s, y - s, s * 2, s * 2);
+          g.fillStyle = h.k === 'del' ? '#c0392b' : (h.k === 'move' ? '#2b6cb0' : '#fff');
+          g.fill();
+          g.lineWidth = 2; g.strokeStyle = h.k === 'del' ? '#c0392b' : '#2b6cb0'; g.stroke();
+          if (h.k === 'del') {
+            g.beginPath();
+            g.moveTo(x - 3, y - 3); g.lineTo(x + 3, y + 3);
+            g.moveTo(x + 3, y - 3); g.lineTo(x - 3, y + 3);
+            g.strokeStyle = '#fff'; g.lineWidth = 2; g.stroke();
+          }
+        }
+      }
+    }
+  }
+
+  /* --- 曲線（点を乗せるための補助線） --- */
+  const arcs = fArc.arcs || [];
+  if (arcs.length) {
+    g.save();
+    g.strokeStyle = '#9aabbe';
+    g.lineWidth = Math.max(1, sc * 0.022);
+    g.setLineDash([sc * 0.16, sc * 0.13]);
+    for (const a of arcs) {
+      const c = arcCtrl(a);
+      g.beginPath(); g.moveTo(X(a.x1), Y(a.y1));
+      g.quadraticCurveTo(X(c.x), Y(c.y), X(a.x2), Y(a.y2));
+      g.stroke();
+    }
+    g.restore();
+    /* つまむところは直線・曲線モードのときだけ出す */
+    if (!opt.out && (ui.mode === 'arc' || ui.mode === 'line')) {
+      for (const a of arcs) {
+        for (const h of arcHandleList(a, ui.mode)) {
+          const s = 6, x = X(h.x), y = Y(h.y);
+          g.beginPath(); g.rect(x - s, y - s, s * 2, s * 2);
+          g.fillStyle = h.k === 'del' ? '#c0392b' : (h.k === 'move' ? '#2b6cb0' : '#fff');
+          g.fill();
+          g.lineWidth = 2; g.strokeStyle = h.k === 'del' ? '#c0392b' : '#2b6cb0'; g.stroke();
+          if (h.k === 'del') {
+            g.beginPath();
+            g.moveTo(x - 3, y - 3); g.lineTo(x + 3, y + 3);
+            g.moveTo(x + 3, y - 3); g.lineTo(x - 3, y + 3);
+            g.strokeStyle = '#fff'; g.lineWidth = 2; g.stroke();
+          }
+        }
+      }
+    }
+  }
+
+  /* --- ひとつ前の隊形（薄く重ねる） --- */
+  if (ui.onion && !opt.out) {
+    const idx = S.formations.findIndex(x => x.id === (opt.formation || curF()).id);
+    const prev = idx > 0 ? S.formations[idx - 1] : null;
+    if (prev) {
+      const cm = {}; S.classes.forEach(c => cm[c.id] = c);
+      const rr = ptR() * (sc / view.scale);
+      g.save(); g.globalAlpha = 0.28;
+      for (const p of prev.points) {
+        g.beginPath(); g.arc(X(p.x), Y(p.y), rr, 0, Math.PI * 2);
+        g.fillStyle = cm[p.cls] ? cm[p.cls].color : '#888'; g.fill();
+      }
+      g.restore();
+    }
+  }
+
+  /* --- 点 --- */
+  const pr = opt.out ? Math.max(2, sc * 0.15) : ptR() * (sc / view.scale);
+  const f = opt.formation || curF();
+  const cmap = {}; S.classes.forEach(c => cmap[c.id] = c);
+  /* 点と凡例で見え方がずれないよう、必ずこの1か所で描く */
+  const dot = (x, y, col, rad) => {
+    g.beginPath(); g.arc(x, y, rad, 0, Math.PI * 2);
+    g.fillStyle = col; g.fill();
+    /* 小さいときは白フチが太く見えすぎるので付けない */
+    if (rad >= 5) { g.lineWidth = rad * 0.16; g.strokeStyle = 'rgba(255,255,255,.85)'; g.stroke(); }
+  };
+  for (const p of f.points) {
+    const c = cmap[p.cls];
+    dot(X(p.x), Y(p.y), c ? c.color : '#888', pr);
+  }
+
+  /* --- 番号（クラスごとの通し番号。置いた順） --- */
+  if (ui.num && pr >= 6) {
+    const seen = {};
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.font = '700 ' + (pr * 1.15).toFixed(1) + 'px "BIZ UDPGothic","Meiryo",sans-serif';
+    for (const p of f.points) {
+      seen[p.cls] = (seen[p.cls] || 0) + 1;
+      const c = cmap[p.cls];
+      g.fillStyle = isLight(c ? c.color : '#888') ? '#1b2430' : '#ffffff';
+      g.fillText(String(seen[p.cls]), X(p.x), Y(p.y) + pr * 0.04);
+    }
+  }
+
+  /* --- 書き出し・印刷のときだけ：見出しと凡例 --- */
+  if (opt.out) {
+    const pad = W * 0.018;
+    g.textAlign = 'left'; g.textBaseline = 'top';
+    g.fillStyle = '#1b2430';
+    g.font = '700 ' + (W * 0.030).toFixed(1) + 'px "BIZ UDPGothic","Meiryo",sans-serif';
+    g.fillText(f.name, pad, pad);
+
+    const cnt = {}; S.classes.forEach(c => cnt[c.id] = 0);
+    f.points.forEach(p => { if (cnt[p.cls] !== undefined) cnt[p.cls]++; });
+    /* 凡例の丸は、点とまったく同じ大きさ・同じ描き方にする */
+    const fs = W * 0.019, lh = Math.max(fs * 1.65, pr * 2.4);
+    let y = H - pad - lh * S.classes.length;
+    g.font = '' + fs.toFixed(1) + 'px "BIZ UDPGothic","Meiryo",sans-serif';
+    g.textBaseline = 'middle';
+    for (const c of S.classes) {
+      dot(pad + pr, y + lh / 2, c.color, pr);
+      g.fillStyle = '#33445a';
+      g.fillText(c.name + '　' + cnt[c.id] + '人', pad + pr * 2 + fs * 0.5, y + lh / 2);
+      y += lh;
+    }
+    g.textAlign = 'right'; g.textBaseline = 'bottom';
+    g.fillStyle = '#7b8a9c';
+    g.font = '' + (W * 0.016).toFixed(1) + 'px "BIZ UDPGothic","Meiryo",sans-serif';
+    g.fillText('1マス ' + (METERS / ui.div).toFixed(2) + 'm　／　合計 ' + f.points.length + '人', W - pad, H - pad);
+  }
+}
+
+/* 隊形1つを、画面とは無関係の大きさで描き直す */
+function renderOut(f, W) {
+  const w = WORLD.x2 - WORLD.x1, h = WORLD.y2 - WORLD.y1;
+  const H = Math.round(W * h / w);
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const g = c.getContext('2d');
+  const sc = (W / w) * 0.97;
+  const ox = (W - w * sc) / 2 - WORLD.x1 * sc;
+  const oy = (H - h * sc) / 2 - WORLD.y1 * sc;
+  paint(g, W, H, sc, ox, oy, { out: true, formation: f });
+  return c;
+}
+
+/* 人数の上限（targetが0なら上限なし） */
+function countOf(clsId) { return curF().points.filter(p => p.cls === clsId).length; }
+function isFull(clsId) {
+  const c = S.classes.find(x => x.id === clsId);
+  return !!(c && c.target > 0 && countOf(clsId) >= c.target);
+}
+let flashTimer = null;
+function flash(msg) {
+  const h = document.getElementById('hint');
+  h.textContent = msg; h.classList.add('warn'); h.classList.remove('info');
+  clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => { h.classList.remove('warn'); draw(); }, 1800);
+}
+/* 寸法などの案内（赤くしない） */
+function flash2(msg) {
+  const h = document.getElementById('hint');
+  h.textContent = msg; h.classList.add('info'); h.classList.remove('warn');
+  clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => { h.classList.remove('info'); draw(); }, 2600);
+}
+
+function draw() {
+  paint(ctx, cssW, cssH, view.scale, view.ox, view.oy, {});
+  const f = curF();
+  const h = document.getElementById('hint');
+  if (h.classList.contains('warn') || h.classList.contains('info')) return;
+  document.getElementById('hint').textContent =
+    f.name + '：' + f.points.length + '人　／　1マス ' + (METERS / ui.div).toFixed(2) + 'm　／　' +
+    (drag && drag.type === 'paint' ? '連続配置中：そのまま引っぱると点が並びます'
+                   : ui.markerEdit ? '目印編集中（クリックで追加・既存をクリックで削除）'
+                   : ui.mode === 'place' ? '空きをクリックで配置／点をクリックで削除／点をドラッグで移動／長押しで連続配置'
+                   : ui.mode === 'circle' ? 'ドラッグで円を描く／円をクリックで人数を入れて等間隔に配置／□で移動・大きさ／✕で削除'
+                   : ui.mode === 'line' ? 'ドラッグで直線を引く／線をクリックで人数を入れて等間隔に配置／□で両端・移動／✕で削除'
+                   : ui.mode === 'arc' ? 'ドラッグで曲線を引く／線をクリックで人数を入れて等間隔に配置／□で両端・ふくらみ／✕で削除'
+                   : ui.mode === 'erase' ? 'ドラッグでなぞった点をまとめて削除'
+                   : 'ドラッグで画面移動');
+}
+
+/* =========================================================================
+   当たり判定
+   ========================================================================= */
+/* pad=0 なら「見えている丸の中」だけを当たりとする（押し間違いで消さないため） */
+function hitPoint(sx, sy, pad) {
+  const f = curF(), r = ptR() + (pad || 0);
+  for (let i = f.points.length - 1; i >= 0; i--) {
+    const p = f.points[i];
+    const dx = u2sx(p.x) - sx, dy = u2sy(p.y) - sy;
+    if (dx * dx + dy * dy <= r * r) return i;
+  }
+  return -1;
+}
+function hitMarker(sx, sy) {
+  const r = Math.max(9, mkR() + 7);
+  for (let i = S.markers.length - 1; i >= 0; i--) {
+    const m = S.markers[i];
+    const dx = u2sx(m.x) - sx, dy = u2sy(m.y) - sy;
+    if (dx * dx + dy * dy <= r * r) return i;
+  }
+  return -1;
+}
+
+/* =========================================================================
+   入力
+   ========================================================================= */
+const pointers = new Map();
+let drag = null;          // {type:'point'|'pan', ...}
+let pinch = null;
+
+function localXY(e) {
+  const r = cv.getBoundingClientRect();
+  return { x: e.clientX - r.left, y: e.clientY - r.top };
+}
+
+cv.addEventListener('pointerdown', e => {
+  cv.setPointerCapture(e.pointerId);
+  const p = localXY(e);
+  pointers.set(e.pointerId, p);
+
+  if (pointers.size === 2) {                       // ピンチ開始
+    drag = null;
+    const [a, b] = [...pointers.values()];
+    pinch = {
+      d: Math.hypot(a.x - b.x, a.y - b.y),
+      cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2,
+      scale: view.scale, ox: view.ox, oy: view.oy
+    };
+    return;
+  }
+  if (pointers.size > 2) return;
+
+  /* --- 目印編集 --- */
+  if (ui.markerEdit) {
+    const mi = hitMarker(p.x, p.y);
+    snapshot();
+    if (mi >= 0) S.markers.splice(mi, 1);
+    else {
+      const u = { x: Math.round(s2ux(p.x)), y: Math.round(s2uy(p.y)) };
+      if (!S.markers.some(m => m.x === u.x && m.y === u.y)) S.markers.push(u);
+    }
+    afterChange();
+    return;
+  }
+
+  /* --- 画面移動 --- */
+  if (ui.mode === 'pan' || e.button === 1) {
+    drag = { type: 'pan', sx: p.x, sy: p.y, ox: view.ox, oy: view.oy };
+    return;
+  }
+
+  /* --- 円モード --- */
+  if (ui.mode === 'circle') {
+    const f = curF();
+    const hh = hitCircleHandle(p.x, p.y);
+    if (hh) {
+      if (hh.k === 'del') { snapshot(); f.circles.splice(hh.i, 1); afterChange(); return; }
+      snapshot();
+      const c = f.circles[hh.i];
+      drag = { type: 'circleH', i: hh.i, k: hh.k, moved: false,
+               ox: c.cx, oy: c.cy, sx: p.x, sy: p.y, ring: grabRing(c) };
+      return;
+    }
+    const ci = hitCircle(p.x, p.y, 12);
+    if (ci >= 0) { drag = { type: 'circleTap', i: ci, px: 0, sx: p.x, sy: p.y }; return; }
+    const u = { x: s2ux(p.x), y: s2uy(p.y) };
+    snapshot();
+    f.circles.push({ cx: u.x, cy: u.y, rx: 0.01, ry: 0.01 });
+    drag = { type: 'circleH', i: f.circles.length - 1, k: 'new', moved: true, isNew: true, sx: p.x, sy: p.y };
+    afterChange();
+    return;
+  }
+
+  /* --- 直線モード・曲線モード（どちらも同じ図形を扱う） --- */
+  if (ui.mode === 'arc' || ui.mode === 'line') {
+    const f = curF();
+    const hh = hitArcHandle(p.x, p.y);
+    if (hh) {
+      if (hh.k === 'del') { snapshot(); f.arcs.splice(hh.i, 1); afterChange(); return; }
+      snapshot();
+      const a = f.arcs[hh.i];
+      drag = { type: 'arcH', i: hh.i, k: hh.k, moved: false, ring: grabArcPts(a),
+               sx: p.x, sy: p.y, o: { x1: a.x1, y1: a.y1, x2: a.x2, y2: a.y2 } };
+      return;
+    }
+    const ai = hitArc(p.x, p.y, 12);
+    if (ai >= 0) { drag = { type: 'arcTap', i: ai, px: 0, sx: p.x, sy: p.y }; return; }
+    const u = { x: s2ux(p.x), y: s2uy(p.y) };
+    snapshot();
+    f.arcs.push({ x1: u.x, y1: u.y, x2: u.x, y2: u.y, h: 0 });
+    drag = { type: 'arcH', i: f.arcs.length - 1, k: 'x2y2', moved: true, isNew: true, sx: p.x, sy: p.y };
+    afterChange();
+    return;
+  }
+
+  /* 指はマウスより太いので少しだけ余裕をみる */
+  const pad = e.pointerType === 'touch' ? 5 : 0;
+  const pi = hitPoint(p.x, p.y, ui.mode === 'erase' ? pad + 3 : pad);
+
+  /* --- なぞって消す --- */
+  if (ui.mode === 'erase') {
+    snapshot();
+    drag = { type: 'erase', removed: 0 };
+    if (pi >= 0) { curF().points.splice(pi, 1); drag.removed++; afterChange(); }
+    return;
+  }
+
+  /* --- 編集：点の上なら「離すだけで削除／動かせば移動」 --- */
+  if (pi >= 0) {
+    snapshot();
+    drag = { type: 'point', idx: pi, moved: false, isNew: false, sx: p.x, sy: p.y, px: 0 };
+  } else {
+    const c = curC();
+    if (isFull(c.id)) { flash(c.name + ' はもう ' + c.target + '人です。これ以上置けません。'); return; }
+    /* 曲線の近くなら、グリッドではなく曲線の上に乗せる */
+    const ci = hitCircle(p.x, p.y, 12);
+    const ai = ci >= 0 ? -1 : hitArc(p.x, p.y, 12);
+    let u, onArc = null, onCircle = false;
+    if (ci >= 0) {
+      const r = circleNearest(curF().circles[ci], s2ux(p.x), s2uy(p.y));
+      u = { x: r.p.x, y: r.p.y };
+      onCircle = true;
+    } else if (ai >= 0) {
+      const r = arcNearest(curF().arcs[ai], s2ux(p.x), s2uy(p.y));
+      u = { x: r.p.x, y: r.p.y };
+      onArc = { i: ai, s: r.s };
+    } else {
+      u = snapU(s2ux(p.x), s2uy(p.y));
+    }
+    snapshot();
+    curF().points.push({ x: u.x, y: u.y, cls: c.id });
+    drag = { type: 'point', idx: curF().points.length - 1, moved: true, isNew: true, sx: p.x, sy: p.y, px: 0, timer: null, onArc: onArc };
+    /* 押したまま待つと「連続配置」に切り替わる（円の上は人数指定で並べるので対象外） */
+    if (onCircle) { afterChange(); return; }
+    const d = drag;
+    d.timer = setTimeout(() => {
+      if (drag !== d) return;
+      d.type = 'paint';
+      d.timer = null;
+      d.last = { x: u.x, y: u.y };
+      if (d.onArc) { d.doneK = new Set([Math.round(d.onArc.s / gridStep())]); }
+      draw();
+    }, 160);
+    afterChange();
+  }
+});
+
+/* 連続配置：直前の位置から今の位置までを細かく刻んで、通ったマスに点を置く */
+/* 円に人数を指定して等間隔に並べる。
+   同じ円の上にある同じクラスの点は一度どけてから並べ直すので、
+   人数を打ち替えれば何度でもやり直せる。 */
+async function fillShape(kind, i) {
+  const f = curF();
+  const o = kind === 'circle' ? f.circles[i] : f.arcs[i];
+  if (!o) return;
+  const closed = kind === 'circle';
+  const cls = curC();
+  const tb = closed ? circleTable(o, 720) : arcTable(o, 480);
+  const label = closed ? '円' : (Math.abs(o.h) < 0.05 ? '直線' : '曲線');
+  const onIt = p => nearestInTable(tb, p.x, p.y).d <= RING_TOL;
+  const already = f.points.filter(p => p.cls === cls.id && onIt(p)).length;
+  const other = f.points.filter(p => p.cls !== cls.id && onIt(p)).length;
+  const room = cls.target > 0 ? cls.target - (countOf(cls.id) - already) : 999;
+
+  const v = await ask4('この' + label + 'に並べる人数',
+    (closed ? circleInfo(o) : arcInfo(o)) + '\n'
+    + '並べるクラス：' + cls.name + (cls.target > 0 ? '（' + cls.target + '人）' : '')
+    + (already ? '\nこの' + label + 'にある' + cls.name + 'の点 ' + already + '個は並べ直します。' : '')
+    + (other ? '\n他のクラスの点 ' + other + '個はそのまま残ります。' : '')
+    + '\n0にすると、この' + label + 'の' + cls.name + 'の点を消します。',
+    String(already || (cls.target > 0 ? Math.min(cls.target, room) : 0)));
+  if (v === null) return;
+  let n = Math.max(0, parseInt(v, 10) || 0);
+  if (n > room) { n = Math.max(0, room); flash(cls.name + ' は最大 ' + n + '人までです。'); }
+
+  snapshot();
+  f.points = f.points.filter(p => !(p.cls === cls.id && onIt(p)));
+  for (let k = 0; k < n; k++) {
+    /* 円は一周でつながるので n 等分。直線・曲線は両端に人を置きたいので n-1 等分。 */
+    const s = closed ? tb.len * k / n
+                     : (n === 1 ? tb.len / 2 : tb.len * k / (n - 1));
+    const q = arcPosAt(tb, s);
+    f.points.push({ x: q.x, y: q.y, cls: cls.id });
+  }
+  afterChange();
+  if (n > 1) {
+    const gap = (closed ? tb.len / n : tb.len / (n - 1)) * METERS;
+    flash2('間隔 ' + gap.toFixed(2) + 'm で ' + n + '人ならべました');
+  }
+}
+
+/* 曲線に沿って、弧長を等分した位置に並べる */
+function paintArcTo(ux, uy) {
+  const f = curF(), c = curC(), a = f.arcs[drag.onArc.i];
+  if (!a) return 0;
+  const step = gridStep();
+  const r = arcNearest(a, ux, uy);
+  const k0 = Math.round(drag.onArc.s / step), k1 = Math.round(r.s / step);
+  const lo = Math.min(k0, k1), hi = Math.max(k0, k1);
+  let added = 0;
+  for (let k = lo; k <= hi; k++) {
+    if (drag.doneK.has(k)) continue;
+    if (isFull(c.id)) {
+      if (!drag.warned) { drag.warned = true; flash(c.name + ' はもう ' + c.target + '人です。これ以上置けません。'); }
+      break;
+    }
+    const s = k * step;
+    if (s < 0 || s > r.tb.len) { drag.doneK.add(k); continue; }
+    const q = arcPosAt(r.tb, s);
+    f.points.push({ x: q.x, y: q.y, cls: c.id });
+    drag.doneK.add(k);
+    added++;
+  }
+  return added;
+}
+
+function paintTo(ux, uy) {
+  if (drag.onArc) return paintArcTo(ux, uy);
+  const g = gridStep();
+  const f = curF(), c = curC(), cls = c.id;
+  const has = (x, y) => f.points.some(p => Math.abs(p.x - x) < g * 0.45 && Math.abs(p.y - y) < g * 0.45);
+  const a = drag.last;
+  const b = { x: Math.round(ux / g) * g, y: Math.round(uy / g) * g };
+  const dist = Math.hypot(b.x - a.x, b.y - a.y);
+  const steps = Math.max(1, Math.ceil(dist / (g * 0.5)));
+  let added = 0;
+  for (let i = 1; i <= steps; i++) {
+    if (isFull(cls)) {
+      drag.last = b;
+      if (!drag.warned) { drag.warned = true; flash(c.name + ' はもう ' + c.target + '人です。これ以上置けません。'); }
+      return added;
+    }
+    const x = Math.round((a.x + (b.x - a.x) * i / steps) / g) * g;
+    const y = Math.round((a.y + (b.y - a.y) * i / steps) / g) * g;
+    if (!has(x, y)) { f.points.push({ x, y, cls }); added++; }
+  }
+  drag.last = b;
+  return added;
+}
+
+cv.addEventListener('pointermove', e => {
+  if (!pointers.has(e.pointerId)) return;
+  const p = localXY(e);
+  pointers.set(e.pointerId, p);
+
+  if (pinch && pointers.size === 2) {
+    const [a, b] = [...pointers.values()];
+    const d = Math.hypot(a.x - b.x, a.y - b.y);
+    const k = Math.max(0.2, Math.min(8, d / pinch.d));
+    const ns = Math.max(6, Math.min(400, pinch.scale * k));
+    const cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
+    const ux = (pinch.cx - pinch.ox) / pinch.scale, uy = (pinch.cy - pinch.oy) / pinch.scale;
+    userMoved = true;
+    view.scale = ns; view.ox = cx - ux * ns; view.oy = cy - uy * ns;
+    draw();
+    return;
+  }
+  if (!drag) return;
+
+  if (drag.type === 'pan') {
+    userMoved = true;
+    view.ox = drag.ox + (p.x - drag.sx);
+    view.oy = drag.oy + (p.y - drag.sy);
+    draw();
+  } else if (drag.type === 'circleH') {
+    const c = curF().circles[drag.i];
+    if (c) {
+      const ux = s2ux(p.x), uy = s2uy(p.y);
+      if (drag.k === 'new') {
+        const r = Math.max(0.2, Math.hypot(ux - c.cx, uy - c.cy));
+        c.rx = r; c.ry = r;
+      } else if (drag.k === 'move') {
+        c.cx = drag.ox + (p.x - drag.sx) / view.scale;
+        c.cy = drag.oy + (p.y - drag.sy) / view.scale;
+      } else if (drag.k === 'rx') {
+        c.rx = Math.max(0.2, Math.abs(ux - c.cx));
+      } else {
+        c.ry = Math.max(0.2, Math.abs(uy - c.cy));
+      }
+      if (drag.ring) applyRing(c, drag.ring);
+      drag.moved = true;
+      flash2(circleInfo(c));
+      draw();
+    }
+  } else if (drag.type === 'circleTap' || drag.type === 'arcTap') {
+    drag.px = Math.max(drag.px, Math.hypot(p.x - drag.sx, p.y - drag.sy));
+  } else if (drag.type === 'arcH') {
+    const a = curF().arcs[drag.i];
+    if (a) {
+      const ux = s2ux(p.x), uy = s2uy(p.y);
+      if (drag.k === 'x1y1') { a.x1 = ux; a.y1 = uy; }
+      else if (drag.k === 'x2y2') { a.x2 = ux; a.y2 = uy; }
+      else if (drag.k === 'move') {
+        const dx = (p.x - drag.sx) / view.scale, dy = (p.y - drag.sy) / view.scale;
+        a.x1 = drag.o.x1 + dx; a.y1 = drag.o.y1 + dy;
+        a.x2 = drag.o.x2 + dx; a.y2 = drag.o.y2 + dy;
+      }
+      else arcSetHandle(a, ux, uy);
+      if (drag.ring) applyArcPts(a, drag.ring);
+      drag.moved = true; flash2(arcInfo(a)); draw();
+    }
+  } else if (drag.type === 'erase') {
+    const pi = hitPoint(p.x, p.y, 3);
+    if (pi >= 0) { curF().points.splice(pi, 1); drag.removed++; renderSide(); renderTabs(); draw(); }
+  } else if (drag.type === 'paint') {
+    if (paintTo(s2ux(p.x), s2uy(p.y))) { renderSide(); renderTabs(); draw(); }
+  } else if (drag.type === 'point') {
+    drag.px = Math.max(drag.px, Math.hypot(p.x - drag.sx, p.y - drag.sy));
+    /* 少しでも動かしたら長押し待ちは取り消し（＝置いた点の位置調整として扱う） */
+    if (drag.timer && drag.px > 6) { clearTimeout(drag.timer); drag.timer = null; }
+    const u = snapU(s2ux(p.x), s2uy(p.y));
+    const pt = curF().points[drag.idx];
+    if (pt && (pt.x !== u.x || pt.y !== u.y)) { pt.x = u.x; pt.y = u.y; drag.moved = true; draw(); }
+  }
+});
+
+function endPointer(e) {
+  pointers.delete(e.pointerId);
+  if (pointers.size < 2) pinch = null;
+  if (pointers.size === 0 && drag) {
+    if (drag.timer) { clearTimeout(drag.timer); drag.timer = null; }
+    if (drag.type === 'point') {
+      if (drag.isNew) afterChange();                       // 新しく置いた点はそのまま
+      else if (drag.moved) afterChange();                  // 動かした → 移動
+      else if (drag.px > 6) { undoStack.pop(); }            // 掴んで戻した → 何もしない
+      else { curF().points.splice(drag.idx, 1); afterChange(); }   // 押して離しただけ → 削除
+    }
+    else if (drag.type === 'paint') afterChange();
+    else if (drag.type === 'circleH') {
+      const c = curF().circles[drag.i];
+      if (c && drag.isNew && c.rx < 0.25) curF().circles.splice(drag.i, 1);
+      /* □の上で動かさずに離したときも、図形をクリックしたものとして扱う */
+      if (c && !drag.moved && !drag.isNew) { const i = drag.i; undoStack.pop(); drag = null; fillShape('circle', i); return; }
+      afterChange();
+    }
+    else if (drag.type === 'circleTap' || drag.type === 'arcTap') {
+      const i = drag.i, kind = drag.type === 'circleTap' ? 'circle' : 'arc', moved = drag.px > 6;
+      drag = null;
+      if (!moved) { fillShape(kind, i); return; }
+    }
+    else if (drag.type === 'arcH') {
+      const a = curF().arcs[drag.i];
+      /* 引かずに離した新しい線（長さ0）は残さない */
+      if (a && drag.isNew && Math.hypot(a.x2 - a.x1, a.y2 - a.y1) < 0.2) {
+        curF().arcs.splice(drag.i, 1);
+      }
+      /* □の上で動かさずに離したときも、図形をクリックしたものとして扱う */
+      else if (a && !drag.moved && !drag.isNew) { const i = drag.i; undoStack.pop(); drag = null; fillShape('arc', i); return; }
+      afterChange();
+    }
+    else if (drag.type === 'erase') { if (drag.removed) afterChange(); else undoStack.pop(); }
+    drag = null;
+    draw();
+  }
+}
+cv.addEventListener('pointerup', endPointer);
+cv.addEventListener('pointercancel', endPointer);
+
+cv.addEventListener('wheel', e => {
+  e.preventDefault();
+  const p = localXY(e);
+  const k = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+  const ns = Math.max(6, Math.min(400, view.scale * k));
+  const ux = s2ux(p.x), uy = s2uy(p.y);
+  userMoved = true;
+  view.scale = ns; view.ox = p.x - ux * ns; view.oy = p.y - uy * ns;
+  draw();
+}, { passive: false });
+
+cv.addEventListener('contextmenu', e => e.preventDefault());
+
+window.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  const k = e.key.toLowerCase();
+  if ((e.ctrlKey || e.metaKey) && k === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
+  else if ((e.ctrlKey || e.metaKey) && (k === 'y' || (k === 'z' && e.shiftKey))) { e.preventDefault(); redo(); }
+});
+
+/* =========================================================================
+   サイド（クラス）
+   ========================================================================= */
+function renderSide() {
+  const f = curF();
+  const cnt = {}; S.classes.forEach(c => cnt[c.id] = 0);
+  f.points.forEach(p => { if (cnt[p.cls] !== undefined) cnt[p.cls]++; });
+
+  const box = document.getElementById('clsList');
+  box.innerHTML = '';
+  for (const c of S.classes) {
+    const d = document.createElement('div');
+    d.className = 'cls' + (c.id === S.activeClass ? ' sel' : '');
+    const n = cnt[c.id], t = c.target || 0;
+    let cls = '', txt = t > 0 ? (n + ' / ' + t) : String(n);
+    if (t > 0) cls = n === t ? ' ok' : (n > t ? ' over' : '');
+    d.innerHTML = '<div class="sw" style="background:' + c.color + '"></div>' +
+                  '<div class="nm"></div><div class="ct' + cls + '"></div>';
+    d.querySelector('.nm').textContent = c.name;
+    d.querySelector('.ct').textContent = txt;
+    d.onclick = () => { S.activeClass = c.id; persist(); renderSide(); };
+    box.appendChild(d);
+  }
+  const tot = f.points.length;
+  const tgt = S.classes.reduce((a, c) => a + (c.target || 0), 0);
+  document.getElementById('total').textContent = '合計 ' + tot + (tgt ? ' / ' + tgt : '') + ' 人';
+  document.getElementById('undo').disabled = !undoStack.length;
+  document.getElementById('redo').disabled = !redoStack.length;
+}
+
+/* クラス名・人数・色を1画面で編集する */
+function buildColorPicker(sel) {
+  const box = document.getElementById('cfColors');
+  box.innerHTML = '';
+  elF.dataset.color = sel;
+  for (const [nm, hex] of COLORS) {
+    const d = document.createElement('div');
+    d.className = 'cc' + (hex.toLowerCase() === String(sel).toLowerCase() ? ' sel' : '');
+    d.innerHTML = '<i style="background:' + hex + '"></i><span></span>';
+    d.querySelector('span').textContent = nm;
+    d.onclick = () => {
+      elF.dataset.color = hex;
+      [...box.children].forEach(x => x.classList.remove('sel'));
+      d.classList.add('sel');
+    };
+    box.appendChild(d);
+  }
+}
+async function classDialog(c, title) {
+  document.getElementById('cfName').value = c.name;
+  document.getElementById('cfNum').value = String(c.target || 0);
+  buildColorPicker(c.color);
+  const v = await showDialog({ title: title, form: true, okLabel: '決定' });
+  if (!v) return null;
+  const n = parseInt(v.target, 10);
+  return {
+    name: String(v.name).trim() || c.name,
+    target: Math.max(0, isNaN(n) ? 0 : n),
+    color: v.color || c.color
+  };
+}
+document.getElementById('clsAdd').onclick = async () => {
+  const i = S.classes.length;
+  const seed = { name: 'クラス' + (i + 1), target: 0, color: PALETTE[i % PALETTE.length] };
+  const r = await classDialog(seed, 'クラスを追加');
+  if (!r) return;
+  snapshot();
+  const id = nextId('c');
+  S.classes.push({ id, name: r.name, color: r.color, target: r.target });
+  S.activeClass = id;
+  afterChange();
+};
+document.getElementById('clsEdit').onclick = async () => {
+  const c = curC(); if (!c) return;
+  const r = await classDialog(c, 'クラスの設定');
+  if (!r) return;
+  snapshot();
+  c.name = r.name; c.target = r.target; c.color = r.color;
+  afterChange();
+};
+document.getElementById('delCls').onclick = async () => {
+  const c = curC(), f = curF();
+  const n = f.points.filter(p => p.cls === c.id).length;
+  if (!n) return say('消す点がありません', '「' + c.name + '」の点は' + f.name + 'に置かれていません。');
+  if (!await ask('選んだクラスの点を消す',
+      f.name + ' から「' + c.name + '」の点 ' + n + '個を消します。\n（あとで「元に戻す」で戻せます）', '消す')) return;
+  snapshot();
+  f.points = f.points.filter(p => p.cls !== c.id);
+  afterChange();
+};
+document.getElementById('delAll').onclick = async () => {
+  const f = curF();
+  if (!f.points.length) return say('消す点がありません', f.name + ' には点が置かれていません。');
+  if (!await ask('この隊形の点をすべて消す',
+      f.name + ' の点 ' + f.points.length + '個をすべて消します。\n（あとで「元に戻す」で戻せます）', '消す')) return;
+  snapshot();
+  f.points = [];
+  afterChange();
+};
+
+document.getElementById('delArc').onclick = async () => {
+  const f = curF();
+  const n = f.circles.length + f.arcs.length;
+  if (!n) return say('消す図形がありません', f.name + ' には円も曲線もありません。');
+  if (!await ask('この隊形の円・曲線をすべて消す',
+      f.name + ' の円 ' + f.circles.length + '個・曲線 ' + f.arcs.length + '本を消します。\n図形の上に置いた点はそのまま残ります。', '消す')) return;
+  snapshot();
+  f.circles = []; f.arcs = [];
+  afterChange();
+};
+
+document.getElementById('clsDel').onclick = async () => {
+  if (S.classes.length <= 1) return say('削除できません', 'クラスは1つ以上必要です。');
+  const c = curC();
+  const used = S.formations.reduce((a, f) => a + f.points.filter(p => p.cls === c.id).length, 0);
+  if (!await ask('クラスを削除',
+      '「' + c.name + '」を削除します。' + (used ? '\nすべての隊形から、このクラスの点 ' + used + '個も消えます。' : ''), '削除する')) return;
+  snapshot();
+  S.classes = S.classes.filter(x => x.id !== c.id);
+  S.formations.forEach(f => f.points = f.points.filter(p => p.cls !== c.id));
+  S.activeClass = S.classes[0].id;
+  afterChange();
+};
+
+/* =========================================================================
+   タブ（隊形）
+   ========================================================================= */
+function renderTabs() {
+  const bar = document.getElementById('tabs');
+  bar.innerHTML = '';
+  S.formations.forEach(f => {
+    const b = document.createElement('div');
+    b.className = 'tab' + (f.id === S.activeFormation ? ' sel' : '');
+    b.textContent = f.name + '（' + f.points.length + '）';
+    b.onclick = () => { S.activeFormation = f.id; persist(); renderSide(); renderTabs(); draw(); };
+    b.ondblclick = () => renameF();
+    bar.appendChild(b);
+  });
+  const sep = document.createElement('div'); sep.className = 'sep'; bar.appendChild(sep);
+  const mk = (t, fn, title) => {
+    const b = document.createElement('button');
+    b.textContent = t; b.onclick = fn; if (title) b.title = title; bar.appendChild(b);
+  };
+  mk('＋ 追加', addF);
+  mk('複製', dupF, '今の隊形をコピーして次の隊形を作る');
+  mk('名前', renameF);
+  mk('◀', () => moveF(-1));
+  mk('▶', () => moveF(1));
+  mk('削除', delF);
+}
+function addF() {
+  snapshot();
+  const id = nextId('f');
+  S.formations.push({ id, name: '隊形' + (S.formations.length + 1), points: [], arcs: [], circles: [] });
+  S.activeFormation = id;
+  afterChange();
+}
+function dupF() {
+  snapshot();
+  const f = curF(), id = nextId('f');
+  const i = S.formations.indexOf(f);
+  S.formations.splice(i + 1, 0, {
+    id, name: '隊形' + (S.formations.length + 1),
+    points: f.points.map(p => ({ x: p.x, y: p.y, cls: p.cls })),
+    arcs: (f.arcs || []).map(a => ({ x1: a.x1, y1: a.y1, x2: a.x2, y2: a.y2, h: a.h })),
+    circles: (f.circles || []).map(c => ({ cx: c.cx, cy: c.cy, rx: c.rx, ry: c.ry }))
+  });
+  S.activeFormation = id;
+  afterChange();
+}
+async function renameF() {
+  const f = curF();
+  const n = await ask4('隊形の名前', '例：サビ①・移動後 など', f.name); if (n === null) return;
+  snapshot(); f.name = n.trim() || f.name; afterChange();
+}
+function moveF(d) {
+  const i = S.formations.findIndex(f => f.id === S.activeFormation);
+  const j = i + d;
+  if (i < 0 || j < 0 || j >= S.formations.length) return;
+  snapshot();
+  const [f] = S.formations.splice(i, 1);
+  S.formations.splice(j, 0, f);
+  afterChange();
+}
+async function delF() {
+  if (S.formations.length <= 1) return say('削除できません', '隊形は1つ以上必要です。');
+  const f = curF();
+  if (!await ask('隊形を削除', '「' + f.name + '」を削除します。\n置かれている点 ' + f.points.length + '個も一緒に消えます。', '削除する')) return;
+  snapshot();
+  const i = S.formations.indexOf(f);
+  S.formations.splice(i, 1);
+  S.activeFormation = S.formations[Math.min(i, S.formations.length - 1)].id;
+  afterChange();
+}
+
+/* =========================================================================
+   バックアップ
+   ========================================================================= */
+/* ブラウザ標準の confirm / alert / prompt は使わない。
+   Chromeで「このページでこれ以上ダイアログを表示しない」が有効になると
+   すべて無反応（false / null）になり、ボタンが沈黙するため。 */
+const modal = document.getElementById('modal');
+const elT = document.getElementById('bTitle'), elD = document.getElementById('bDesc');
+const elI = document.getElementById('tin'), elA = document.getElementById('ta');
+const elF = document.getElementById('cform');
+const elC = document.getElementById('bCancel'), elO = document.getElementById('bOk');
+const elAlt = document.getElementById('bAlt');
+let resolver = null, cancelVal = null;
+
+function closeModal(v) {
+  modal.classList.remove('show');
+  const r = resolver; resolver = null;
+  if (r) r(v);
+}
+function showDialog(o) {
+  if (resolver) closeModal(cancelVal);
+  return new Promise(res => {
+    elT.textContent = o.title || '';
+    elD.textContent = o.desc || '';
+    elI.style.display = o.input !== undefined ? '' : 'none';
+    if (o.input !== undefined) elI.value = o.input;
+    elA.style.display = o.textarea !== undefined ? '' : 'none';
+    if (o.textarea !== undefined) elA.value = o.textarea;
+    elF.style.display = o.form ? '' : 'none';
+    elC.style.display = o.cancel === false ? 'none' : '';
+    elC.textContent = o.cancelLabel || 'キャンセル';
+    elAlt.style.display = o.altLabel ? '' : 'none';
+    if (o.altLabel) elAlt.textContent = o.altLabel;
+    elO.textContent = o.okLabel || 'OK';
+    cancelVal = o.cancelValue !== undefined ? o.cancelValue : null;
+    resolver = res;
+    modal.classList.add('show');
+    setTimeout(() => {
+      if (o.form) { document.getElementById('cfName').focus(); document.getElementById('cfName').select(); }
+      else if (o.input !== undefined) { elI.focus(); elI.select(); }
+      else if (o.textarea !== undefined) { elA.focus(); if (o.selectAll) elA.select(); }
+      else elO.focus();
+    }, 40);
+  });
+}
+elC.onclick = () => closeModal(cancelVal);
+elAlt.onclick = () => closeModal('alt');
+elO.onclick = () => {
+  if (elF.style.display !== 'none') {
+    closeModal({
+      name: document.getElementById('cfName').value,
+      target: document.getElementById('cfNum').value,
+      color: elF.dataset.color
+    });
+  }
+  else if (elI.style.display !== 'none') closeModal(elI.value);
+  else if (elA.style.display !== 'none') closeModal(elA.value);
+  else closeModal(true);
+};
+modal.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && (elI.style.display !== 'none' || elF.style.display !== 'none')) { e.preventDefault(); elO.click(); }
+  else if (e.key === 'Escape') { e.preventDefault(); closeModal(cancelVal); }
+});
+modal.addEventListener('pointerdown', e => { if (e.target === modal) closeModal(cancelVal); });
+
+const ask  = (t, d, ok) => showDialog({ title: t, desc: d, okLabel: ok || '実行する', cancelValue: false }).then(v => v === true);
+const say  = (t, d)     => showDialog({ title: t, desc: d, cancel: false, okLabel: '閉じる' });
+const ask4 = (t, d, v)  => showDialog({ title: t, desc: d, input: v });
+
+function stamp() {
+  const d = new Date(), p = n => String(n).padStart(2, '0');
+  return d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '-' + p(d.getHours()) + p(d.getMinutes());
+}
+/* ---------- 画像で保存 ---------- */
+function saveCanvas(c, name) {
+  c.toBlob(b => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(b);
+    a.download = name;
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  }, 'image/png');
+}
+document.getElementById('png').onclick = async () => {
+  const v = await showDialog({
+    title: '画像で保存', desc: 'PNG画像で保存します。Wordや資料にそのまま貼れます。',
+    altLabel: 'この隊形だけ', okLabel: '全隊形（' + S.formations.length + '枚）', cancelValue: null
+  });
+  if (v === null) return;
+  const list = v === 'alt' ? [curF()] : S.formations;
+  for (let i = 0; i < list.length; i++) {
+    saveCanvas(renderOut(list[i], 2200), '隊形_' + safeName(list[i].name) + '.png');
+    if (i < list.length - 1) await new Promise(r => setTimeout(r, 350));   // 連続保存はブラウザに間を空ける
+  }
+};
+function safeName(s) { return String(s).replace(/[\\\/:*?"<>|]/g, '_').slice(0, 40) || '無題'; }
+
+/* ---------- 全隊形の一覧 ---------- */
+const gallery = document.getElementById('gallery');
+document.getElementById('galX').onclick = () => gallery.classList.remove('show');
+gallery.addEventListener('pointerdown', e => { if (e.target === gallery) gallery.classList.remove('show'); });
+document.getElementById('gal').onclick = () => {
+  const grid = document.getElementById('galGrid');
+  grid.innerHTML = '';
+  S.formations.forEach(f => {
+    const d = document.createElement('div');
+    d.className = 'gcard' + (f.id === S.activeFormation ? ' sel' : '');
+    const img = new Image();
+    img.src = renderOut(f, 760).toDataURL('image/png');
+    const cap = document.createElement('div');
+    cap.className = 'cap';
+    cap.innerHTML = '<span></span><em></em>';
+    cap.querySelector('span').textContent = f.name;
+    cap.querySelector('em').textContent = f.points.length + '人';
+    d.appendChild(img); d.appendChild(cap);
+    d.onclick = () => {
+      S.activeFormation = f.id;
+      gallery.classList.remove('show');
+      persist(); renderSide(); renderTabs(); draw();
+    };
+    grid.appendChild(d);
+  });
+  gallery.classList.add('show');
+};
+
+/* ---------- 印刷 ---------- */
+document.getElementById('print').onclick = async () => {
+  const v = await showDialog({
+    title: '印刷', desc: 'A4横・1ページに1隊形で印刷します。\n（121人を1ページに何枚も並べると点が小さすぎて読めないため、1枚ずつにしています）',
+    altLabel: 'この隊形だけ', okLabel: '全隊形（' + S.formations.length + 'ページ）', cancelValue: null
+  });
+  if (v === null) return;
+  const list = v === 'alt' ? [curF()] : S.formations;
+  const box = document.getElementById('printArea');
+  box.innerHTML = '';
+  await Promise.all(list.map(f => new Promise(res => {
+    const d = document.createElement('div'); d.className = 'pg';
+    const img = new Image();
+    img.onload = res; img.onerror = res;
+    img.src = renderOut(f, 2200).toDataURL('image/png');
+    d.appendChild(img); box.appendChild(d);
+  })));
+  setTimeout(() => { window.print(); }, 80);
+};
+window.addEventListener('afterprint', () => { document.getElementById('printArea').innerHTML = ''; });
+
+document.getElementById('save').onclick = () => {
+  const blob = new Blob([JSON.stringify(S)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = '隊形_' + stamp() + '.json';
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+};
+document.getElementById('load').onclick = () => {
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = '.json,application/json';
+  inp.onchange = () => {
+    const fl = inp.files && inp.files[0]; if (!fl) return;
+    const rd = new FileReader();
+    rd.onload = () => importText(String(rd.result));
+    rd.readAsText(fl);
+  };
+  inp.click();
+};
+document.getElementById('text').onclick = async () => {
+  const v = await showDialog({
+    title: 'テキストでバックアップ',
+    desc: '下のテキストを全部コピーして、メモ帳などに貼り付けておけばいつでも元に戻せます。\n'
+        + '逆に、以前コピーしたテキストをここに貼り付けて「読み込む」を押すと、その状態に戻ります。',
+    textarea: JSON.stringify(S), selectAll: true,
+    okLabel: '読み込む', cancelLabel: '閉じる'
+  });
+  if (v !== null) await importText(v);
+};
+async function importText(t) {
+  let o;
+  try { o = JSON.parse(t); } catch (e) { await say('読み込めません', 'テキストが途中で切れているか、壊れているようです。'); return false; }
+  if (!o || !Array.isArray(o.formations) || !Array.isArray(o.classes)) {
+    await say('読み込めません', '隊形メーカーのデータではないようです。'); return false;
+  }
+  const n = o.formations.length, p = o.formations.reduce((a, f) => a + (f.points ? f.points.length : 0), 0);
+  if (!await ask('読み込む', '隊形 ' + n + '個・点 ' + p + '個を読み込みます。\n今の内容は置き換わります。', '読み込む')) return false;
+  snapshot();
+  S = normalize(o);
+  afterChange(); fitView(); draw();
+  return true;
+}
+function normalize(o) {
+  const s = Object.assign(freshState(), o);
+  if (!Array.isArray(s.markers) || !s.markers.length) s.markers = defaultMarkers();
+  if (!s.formations.length) s.formations = [{ id: 'f1', name: '隊形1', points: [], arcs: [], circles: [] }];
+  s.formations.forEach(f => {
+    if (!Array.isArray(f.points)) f.points = [];
+    if (!Array.isArray(f.arcs)) f.arcs = [];
+    if (!Array.isArray(f.circles)) f.circles = [];
+  });
+  if (!s.formations.some(f => f.id === s.activeFormation)) s.activeFormation = s.formations[0].id;
+  if (!s.classes.some(c => c.id === s.activeClass)) s.activeClass = s.classes[0].id;
+  s.seq = Math.max(10, s.seq | 0);
+  return s;
+}
+
+/* =========================================================================
+   ツールバー
+   ========================================================================= */
+function setMode(m) {
+  ui.mode = m;
+  document.getElementById('mPlace').classList.toggle('on', m === 'place');
+  document.getElementById('mArc').classList.toggle('on', m === 'arc');
+  document.getElementById('mCircle').classList.toggle('on', m === 'circle');
+  document.getElementById('mLine').classList.toggle('on', m === 'line');
+  document.getElementById('mErase').classList.toggle('on', m === 'erase');
+  document.getElementById('mPan').classList.toggle('on', m === 'pan');
+  draw();
+}
+document.getElementById('mPlace').onclick = () => setMode('place');
+document.getElementById('mArc').onclick = () => setMode('arc');
+document.getElementById('mCircle').onclick = () => setMode('circle');
+document.getElementById('mLine').onclick = () => setMode('line');
+document.getElementById('mErase').onclick = () => setMode('erase');
+document.getElementById('mPan').onclick = () => setMode('pan');
+document.getElementById('oNum').onchange = e => { ui.num = e.target.checked; draw(); };
+document.getElementById('oOnion').onchange = e => { ui.onion = e.target.checked; draw(); };
+document.getElementById('gShow').onchange = e => { ui.grid = e.target.checked; draw(); };
+document.getElementById('gDiv').onchange = e => { ui.div = parseInt(e.target.value, 10); draw(); };
+document.getElementById('gSnap').onchange = e => { ui.snap = e.target.checked; };
+document.getElementById('mkEdit').onchange = e => { ui.markerEdit = e.target.checked; draw(); };
+document.getElementById('undo').onclick = undo;
+document.getElementById('redo').onclick = redo;
+document.getElementById('fit').onclick = () => { userMoved = false; fitView(); draw(); };
+
+/* =========================================================================
+   起動
+   ========================================================================= */
+function boot() {
+  let raw = null;
+  try { raw = localStorage.getItem(KEY); } catch (e) {}
+  if (raw) { try { S = normalize(JSON.parse(raw)); } catch (e) { S = freshState(); } }
+  else S = freshState();
+
+  renderSide(); renderTabs();
+
+  /* 既定は常に全体表示。自分で拡大・移動したときだけ、その見え方を保つ。
+     （レイアウト確定前に測ると幅0で読まれ縮尺が壊れるので、確定後に測り直す） */
+  const relayout = () => {
+    resize();
+    if (!userMoved && cssW > 10 && cssH > 10) fitView();
+    draw();
+  };
+  if (window.ResizeObserver) new ResizeObserver(relayout).observe(document.getElementById('stage'));
+  window.addEventListener('resize', relayout);
+  requestAnimationFrame(relayout);
+  setTimeout(relayout, 120);          // フォント読み込みで高さが変わる場合に備える
+  relayout();
+}
+boot();
+</script>
+</body>
+</html>
