@@ -413,6 +413,21 @@ const RING_TOL = 0.2;                       // 図形の上とみなす幅（約
    図形の上に並べた点には `s`（図形の番号）を付けてある。
    これがないと、図形どうしが重なったときに隣の図形の点まで連れて行ってしまう。
    手で置いた点（`s` なし）は、近ければその図形のものとして扱う。 */
+/* 番号から図形を引く。点を動かすとき、その点が乗っている図形に吸着させるのに使う。 */
+function shapeById(sid) {
+  if (!sid) return null;
+  const f = curF();
+  const c = (f.circles || []).find(x => x.sid === sid);
+  if (c) return { kind: 'circle', o: c };
+  const a = (f.arcs || []).find(x => x.sid === sid);
+  if (a) return { kind: 'arc', o: a };
+  return null;
+}
+function snapToShape(sh, ux, uy) {
+  const r = sh.kind === 'circle' ? circleNearest(sh.o, ux, uy) : arcNearest(sh.o, ux, uy);
+  return { x: r.p.x, y: r.p.y };
+}
+
 function ownsPoint(shape, p, near) {
   if (p.s) return p.s === shape.sid;
   return near;
@@ -1036,7 +1051,9 @@ cv.addEventListener('pointerdown', e => {
   /* --- 編集：点の上なら「離すだけで削除／動かせば移動」 --- */
   if (pi >= 0) {
     snapshot();
-    drag = { type: 'point', idx: pi, moved: false, isNew: false, sx: p.x, sy: p.y, px: 0 };
+    /* 図形の上の点は、動かしてもその図形から外れないようにする */
+    drag = { type: 'point', idx: pi, moved: false, isNew: false, sx: p.x, sy: p.y, px: 0,
+             snapShape: shapeById(curF().points[pi].s) };
   } else {
     const c = curC();
     if (isFull(c.id)) { flash(c.name + ' はもう ' + c.target + '人です。これ以上置けません。'); return; }
@@ -1060,7 +1077,8 @@ cv.addEventListener('pointerdown', e => {
     }
     snapshot();
     curF().points.push({ x: u.x, y: u.y, cls: c.id, s: sid || undefined });
-    drag = { type: 'point', idx: curF().points.length - 1, moved: true, isNew: true, sx: p.x, sy: p.y, px: 0, timer: null, onArc: onArc };
+    drag = { type: 'point', idx: curF().points.length - 1, moved: true, isNew: true, sx: p.x, sy: p.y, px: 0, timer: null,
+             onArc: onArc, snapShape: shapeById(sid) };
     /* 押したまま待つと「連続配置」に切り替わる（円の上は人数指定で並べるので対象外） */
     if (onCircle) { afterChange(); return; }
     const d = drag;
@@ -1240,7 +1258,20 @@ cv.addEventListener('pointermove', e => {
     drag.px = Math.max(drag.px, Math.hypot(p.x - drag.sx, p.y - drag.sy));
     /* 少しでも動かしたら長押し待ちは取り消し（＝置いた点の位置調整として扱う） */
     if (drag.timer && drag.px > 6) { clearTimeout(drag.timer); drag.timer = null; }
-    const u = snapU(s2ux(p.x), s2uy(p.y));
+    /* 図形の上の点はその図形に沿って動く。
+       大きく引き離したときだけ図形から外れ、グリッドに戻る。 */
+    const ux = s2ux(p.x), uy = s2uy(p.y);
+    let u;
+    if (drag.snapShape) {
+      const sh = drag.snapShape;
+      const r = sh.kind === 'circle' ? circleNearest(sh.o, ux, uy) : arcNearest(sh.o, ux, uy);
+      if (r.d * view.scale > 45) {
+        drag.snapShape = null;
+        const p0 = curF().points[drag.idx];
+        if (p0) delete p0.s;
+        u = snapU(ux, uy);
+      } else u = { x: r.p.x, y: r.p.y };
+    } else u = snapU(ux, uy);
     const pt = curF().points[drag.idx];
     if (pt && (pt.x !== u.x || pt.y !== u.y)) { pt.x = u.x; pt.y = u.y; drag.moved = true; draw(); }
   }
