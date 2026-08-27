@@ -201,6 +201,9 @@
     <button id="load">読み込み</button>
     <button id="text">テキスト</button>
   </div>
+  <div class="grp">
+    <button id="help" title="操作マニュアルを別のタブで開きます">使い方</button>
+  </div>
 </div>
 
 <div id="main">
@@ -1800,6 +1803,16 @@ document.getElementById('flipV').onchange = e => {
 document.getElementById('undo').onclick = undo;
 document.getElementById('redo').onclick = redo;
 document.getElementById('fit').onclick = () => { userMoved = false; fitView(); draw(); };
+
+/* マニュアルは同じ場所に置いてある manual.html を別タブで開く。
+   中身をこのファイルに写し込むと同じ文章が2か所にでき、片方だけ古くなるため。 */
+document.getElementById('help').onclick = () => {
+  const w = window.open('manual.html', '_blank', 'noopener');
+  if (!w) say('開けませんでした',
+    'ブラウザが新しいタブをふさいでいるようです。\n'
+    + 'アドレス欄の右に出るポップアップの許可を出すか、\n'
+    + 'index.html と同じ場所にある manual.html を直接開いてください。');
+};
 
 /* =========================================================================
    起動

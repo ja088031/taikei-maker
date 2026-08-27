@@ -46,6 +46,14 @@
 - **上下入替** … 上下の「保護者席側」「本部側」の表示を入れ替えます（点は動きません）
 - **画像で保存 / 印刷** … 隊形名・クラスごとの人数・縮尺を添えて出力（A4横・1ページ1隊形）
 - **書き出し / 読み込み / テキスト** … バックアップ
+- **使い方** … 操作マニュアル（`manual.html`）を別タブで開く
+
+## マニュアル
+
+- ブラウザで読む: https://ja088031.github.io/taikei-maker/manual.html
+- 印刷用PDF: `隊形メーカー_操作マニュアル.pdf`（A4縦・16ページ）
+- 元データは `manual.html`。PDFはChromeのヘッドレスで作り直せます:
+  `chrome --headless=new --no-pdf-header-footer --print-to-pdf="出力.pdf" manual.html`
 
 ## 運動場の図面について
 
