@@ -188,7 +188,8 @@
   <div class="grp">
     <button id="fit">全体表示</button>
     <label class="chk"><input type="checkbox" id="mkEdit">目印を編集</label>
-    <label class="chk" title="上の「保護者席側」と下の「本部側」を入れ替えます"><input type="checkbox" id="flipS">上下入替</label>
+    <label class="chk" title="上の「保護者席側」と下の「本部側」の表示だけを入れ替えます（点は動きません）"><input type="checkbox" id="flipS">上下入替</label>
+    <label class="chk" title="反対側に立って見た図にします。上下と左右の両方が入れ替わります"><input type="checkbox" id="flipV">反対側から見る</label>
   </div>
   <div class="grp">
     <button id="gal">一覧</button>
@@ -561,6 +562,7 @@ function freshState() {
     activeClass: 'c1',
     markers: defaultMarkers(),
     flipSides: false,
+    flipView: false,
     formations: [{ id: 'f1', name: '隊形1', points: [], arcs: [], circles: [] }],
     activeFormation: 'f1',
     seq: 10
@@ -604,10 +606,18 @@ const cv = document.getElementById('cv');
 const ctx = cv.getContext('2d');
 let cssW = 0, cssH = 0;
 
-function u2sx(x) { return x * view.scale + view.ox; }
-function u2sy(y) { return y * view.scale + view.oy; }
-function s2ux(x) { return (x - view.ox) / view.scale; }
-function s2uy(y) { return (y - view.oy) / view.scale; }
+/* 「反対側から見る」＝運動場の中心のまわりに180度回して見る。
+   反対側に立つと上下だけでなく左右も入れ替わるので、上下反転（鏡像）では
+   左右の指示が逆になってしまう。だから回転にしてある。
+   中心が (4,4) で、トラックも白線も目印もこの点に対して対称なので、
+   地面の絵は回しても変わらない。 */
+function wx(x) { return (S && S.flipView) ? 2 * GROUND.cx - x : x; }
+function wy(y) { return (S && S.flipView) ? 2 * GROUND.cy - y : y; }
+
+function u2sx(x) { return wx(x) * view.scale + view.ox; }
+function u2sy(y) { return wy(y) * view.scale + view.oy; }
+function s2ux(x) { return wx((x - view.ox) / view.scale); }
+function s2uy(y) { return wy((y - view.oy) / view.scale); }
 
 function fitView() {
   const w = WORLD.x2 - WORLD.x1, h = WORLD.y2 - WORLD.y1;
@@ -682,7 +692,7 @@ function drawHandles(g, list, X, Y) {
 
 function paint(g, W, H, sc, ox, oy, opt) {
   opt = opt || {};
-  const X = x => x * sc + ox, Y = y => y * sc + oy;
+  const X = x => wx(x) * sc + ox, Y = y => wy(y) * sc + oy;
 
   g.fillStyle = '#ffffff';
   g.fillRect(0, 0, W, H);
@@ -1368,6 +1378,7 @@ function renderSide() {
   document.getElementById('undo').disabled = !undoStack.length;
   document.getElementById('redo').disabled = !redoStack.length;
   document.getElementById('flipS').checked = !!S.flipSides;
+  document.getElementById('flipV').checked = !!S.flipView;
 }
 
 /* クラス名・人数・色を1画面で編集する */
@@ -1779,6 +1790,12 @@ document.getElementById('flipS').onchange = e => {
   snapshot();
   S.flipSides = e.target.checked;   /* 図面の向きなので、隊形データと一緒に保存する */
   afterChange();
+};
+document.getElementById('flipV').onchange = e => {
+  S.flipView = e.target.checked;    /* 見る向きを変えるだけ。点の位置は書き換えない */
+  persist(); draw();
+  flash2(S.flipView ? '反対側（' + (S.flipSides ? '保護者席側' : '本部側') + 'と逆）から見た図です'
+                    : '元の向きに戻しました');
 };
 document.getElementById('undo').onclick = undo;
 document.getElementById('redo').onclick = redo;
