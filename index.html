@@ -920,6 +920,18 @@ function draw() {
 /* =========================================================================
    当たり判定
    ========================================================================= */
+/* いちばん近い点と、その距離（画面px） */
+function nearestPoint(sx, sy) {
+  const f = curF();
+  let bi = -1, bd = Infinity;
+  for (let i = f.points.length - 1; i >= 0; i--) {
+    const p = f.points[i];
+    const d = Math.hypot(u2sx(p.x) - sx, u2sy(p.y) - sy);
+    if (d < bd) { bd = d; bi = i; }
+  }
+  return { idx: bi, d: bd };
+}
+
 /* pad=0 なら「見えている丸の中」だけを当たりとする（押し間違いで消さないため） */
 function hitPoint(sx, sy, pad) {
   const f = curF(), r = ptR() + (pad || 0);
@@ -1050,18 +1062,34 @@ cv.addEventListener('pointerdown', e => {
   }
 
   /* 指はマウスより太いので少しだけ余裕をみる */
-  const pad = e.pointerType === 'touch' ? 5 : 0;
-  const pi = hitPoint(p.x, p.y, ui.mode === 'erase' ? pad + 3 : pad);
+  const touch = e.pointerType === 'touch';
 
   /* --- なぞって消す --- */
   if (ui.mode === 'erase') {
     snapshot();
     drag = { type: 'erase', removed: 0 };
-    if (pi >= 0) { curF().points.splice(pi, 1); drag.removed++; afterChange(); }
+    const pe = hitPoint(p.x, p.y, (touch ? 6 : 3) + 3);
+    if (pe >= 0) { curF().points.splice(pe, 1); drag.removed++; afterChange(); }
     return;
   }
 
-  /* --- 編集：点の上なら「離すだけで削除／動かせば移動」 --- */
+  /* --- 編集：点をねらったのか、空きをねらったのかを距離で決める ---
+     見えている丸ちょうどで切ると、1pxずれただけで「消す」が「置く」に変わり、
+     消したつもりが別の色の点が増える。そこで
+       ・丸＋わずかな余裕まで … その点をねらったとみなす（クリックで削除／ドラッグで移動）
+       ・そのすぐ外側の帯    … どちらとも言えないので何もしない（誤爆を防ぐ）
+       ・それより遠い        … 空きをねらったとみなして新しい点を置く
+     とする。 */
+  const TOL = touch ? 6 : 3, GAP = 4;
+  const np = nearestPoint(p.x, p.y);
+  const near = ptR() + TOL;
+  const pi = (np.idx >= 0 && np.d <= near) ? np.idx : -1;
+
+  if (pi < 0 && np.idx >= 0 && np.d <= near + GAP) {
+    flash('点のすぐそばです。消すなら丸の中心を、置くならもう少し離してクリックしてください');
+    return;
+  }
+
   if (pi >= 0) {
     snapshot();
     /* 図形の上の点は、動かしてもその図形から外れないようにする */
